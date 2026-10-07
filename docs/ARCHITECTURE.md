@@ -88,6 +88,7 @@ Keep Pulse modular and optional relative to Part A. Prefer packages under `inter
 |--------|------|--------|
 | Observation contract | `internal/pulse/observation` | Typed service signal with explicit timestamps and derived freshness (`IsStale` / `EffectiveStatus`). No I/O. |
 | Stack status adapter | `internal/pulse/stackstatusadapt` | Pure mapping from `stackstatus.NodeReport` / `EnvReport` into observations; does not change live collectors. |
+| Local observation store | `internal/pulse/store` | Process-local `Memory` history behind a `Store` interface (`Append` / `List` / `Latest`); no Databricks. |
 
 ### Proposed (not implemented)
 
@@ -101,32 +102,41 @@ flowchart LR
 
   subgraph pulse["Pulse"]
     OBS["observation (implemented)"]
+    ADAPT["stackstatusadapt (implemented)"]
+    HIST["store.Memory (implemented)"]
     INV["Investigation / evidence"]
-    BASE["Baseline store"]
+    BASE["Baseline analytics"]
     DEP["Deploy impact"]
     AGENT["Agent context packager"]
   end
 
   subgraph backends["Retention backends"]
-    LOCAL["Local/file retention"]
+    MEM["In-memory local (implemented)"]
+    FILE["File retention (planned)"]
     DBX["Databricks optional"]
   end
 
-  SS --> OBS
+  SS -.-> ADAPT -.-> OBS -.-> HIST
   SL -.-> OBS
-  OBS --> INV
-  SS --> BASE
-  DEP --> INV
-  INV --> AGENT
-  BASE --> LOCAL
-  BASE -.-> DBX
+  HIST --> MEM
+  HIST -.-> FILE
+  HIST -.-> DBX
+  OBS -.-> INV
+  HIST -.-> BASE
+  DEP -.-> INV
+  INV -.-> AGENT
   DEP -.-> DBX
 ```
+
+Solid edges mark implemented package relationships that already exist in-tree
+(`store.Memory` backs `Store`). Dashed edges are planned callers/integration
+(not yet wired into CLI/`perch status`).
 
 | Module | Intent | Databricks |
 |--------|--------|------------|
 | Evidence / investigation | Assemble citations from collectors + topology | Not required for assembly |
-| Baselines | Compare current signals to history | Optional amplify |
+| Baselines / analytics | Compare current signals to stored history | Optional amplify |
+| File retention backend | Durable local persistence implementing `store.Store` | Not required |
 | Deploy impact | Correlate deploys with health/log shifts | Optional for large joins |
 | Agent context packager | Stable schemas; evidence vs inference | Not required |
 | Databricks backend | Warehouse-scale analytics | **Optional only** |

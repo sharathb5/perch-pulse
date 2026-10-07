@@ -28,6 +28,21 @@ Rules:
 
 ---
 
+## ADR-008: In-memory local Pulse observation store
+
+**Date:** 2026-10-07  
+**Status:** Accepted
+
+**Context:** Issue #7 needs the smallest local historical store so Pulse can retain observations over time after `stackstatus` → observation adapter, without Databricks or a background collector.
+
+**Decision:** Add `internal/pulse/store` with a small `Store` interface (`Append`, `List`, `Latest`) and a process-local `Memory` implementation. Validate on write via `observation.Validate`. Order and latest-selection reuse `observation.Compare` / `observation.Latest` (never arrival order). Compare-equal duplicates for a service are idempotent no-ops. `List` returns ascending Compare order. Values are cloned on write/read so callers cannot mutate stored rows. No new dependencies; no file/SQLite/Databricks in this step.
+
+**Consequences:** History is lost on process exit. File or warehouse backends can implement the same interface later. Basic Perch collectors remain unchanged and Databricks-independent. Secret content scanning remains a producer responsibility.
+
+**Alternatives considered:** Immediate file persistence (deferred: path/locking/lifecycle decisions without a caller yet); embed history in `stackstatus` (rejected: couples live probes to Pulse retention); require SQLite (rejected: new dependency for Phase 1).
+
+---
+
 ## ADR-007: Map stackstatus rows to Pulse observations
 
 **Date:** 2026-10-07  
