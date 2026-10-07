@@ -28,6 +28,21 @@ Rules:
 
 ---
 
+## ADR-007: Map stackstatus rows to Pulse observations
+
+**Date:** 2026-10-07  
+**Status:** Accepted
+
+**Context:** Issue #5 needs the smallest adapter from live `stackstatus` results to `observation.Observation` without changing `perch status` output or emitting producer `StatusStale`.
+
+**Decision:** Add pure package `internal/pulse/stackstatusadapt` with `FromNodeReport` / `FromEnvReport`. Map live measured health (`Healthy==true` from `shell`, `api`, or successful `probe`) to `StatusHealthy`, except when `ErrorRate > 0` then `StatusDegraded`. Map config-only or unprobed rows (`app_env`, `unchecked` including Perch’s “no HTTP probe” healthy shortcut) to `StatusUnavailable` even when `NodeReport.Healthy` is true (Pulse fail-closed vs `perch status` display). Map missing config/credentials, placeholders, probe setup failures, transport/timeouts, and other no-usable-signal probe errors to `StatusUnavailable`. Map vendor-confirmed failures (HTTP/status detail after a response) to `StatusUnhealthy`. Prefix `ServiceID` with `Env/` when adapting `EnvReport`. Set `Source` to `"stackstatus"`; evidence uses redacted detail (URLs and auth query params stripped) plus provider and numeric `error_rate` only (no `recent_errors`). Timestamps are caller-supplied via `Options`.
+
+**Consequences:** Staleness remains derived in `observation`; adapters never store `StatusStale`. `StatusUnknown` is not produced by this adapter today (unconfigured/unchecked rows are unavailable, not unknown). Callers must pass explicit `ObservedAt`.
+
+**Alternatives considered:** Embed mapping in `stackstatus.Collect` (rejected: couples Pulse to collectors); map unchecked rows to `StatusUnknown` (rejected: product treats them as no usable signal, aligned with TUI “check pending”).
+
+---
+
 ## ADR-006: Typed Pulse observation with derived staleness
 
 **Date:** 2026-10-07  
