@@ -86,7 +86,8 @@ Keep Pulse modular and optional relative to Part A. Prefer packages under `inter
 
 | Module | Path | Intent |
 |--------|------|--------|
-| Observation contract | `internal/pulse/observation` | Typed service signal with explicit timestamps and derived freshness (`IsStale` / `EffectiveStatus`). No I/O; collectors not yet wired. |
+| Observation contract | `internal/pulse/observation` | Typed service signal with explicit timestamps and derived freshness (`IsStale` / `EffectiveStatus`). No I/O. |
+| Stack status adapter | `internal/pulse/stackstatusadapt` | Pure mapping from `stackstatus.NodeReport` / `EnvReport` into observations; does not change live collectors. |
 
 ### Proposed (not implemented)
 
@@ -111,7 +112,7 @@ flowchart LR
     DBX["Databricks optional"]
   end
 
-  SS -.-> OBS
+  SS --> OBS
   SL -.-> OBS
   OBS --> INV
   SS --> BASE
