@@ -472,6 +472,8 @@ export function DetailPanel({ node, environment }) {
   }, [navigate, stackName])
 
   useEffect(() => {
+    // Reset ephemeral copy feedback when the selected node or tab changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional UI reset on navigation
     setCopyWhich(null)
     logsTabFetched.current = false
   }, [node?.id, tab])

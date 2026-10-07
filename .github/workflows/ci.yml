@@ -10,6 +10,7 @@ permissions:
   contents: read
 
 jobs:
+  # Job name kept as "Go" so existing branch-protection required checks continue to match.
   go:
     name: Go
     runs-on: ubuntu-latest
@@ -24,29 +25,12 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      # web/embed.go uses //go:embed all:dist — dist must exist before go vet/test compile the web package.
+      # web/embed.go uses //go:embed all:dist — dist must exist before go vet/test.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build web UI (go:embed)
-        working-directory: web
-        run: npm ci && npm run build:embed
-
-      - name: Format (gofmt)
-        run: test -z "$(gofmt -l .)"
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-
-      - name: gosec
-        # G304: reading user-project files (perch.yaml, package.json, providers/) is the CLI’s job.
-        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet -exclude=G304 ./...
-
-      - name: Test
-        run: go test ./...
+      - name: Verify
+        run: make verify
