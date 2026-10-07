@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,7 +148,7 @@ func TestMemory_OutOfOrderInsertion(t *testing.T) {
 	}
 }
 
-func TestMemory_DuplicateIdempotent(t *testing.T) {
+func TestMemory_DuplicateCompareEqualIsIdempotentFirstSeen(t *testing.T) {
 	s := store.NewMemory()
 	t0 := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
 	obs := mustObs(t, "cache", observation.StatusHealthy, t0, t0, "stackstatus")
@@ -167,6 +168,35 @@ func TestMemory_DuplicateIdempotent(t *testing.T) {
 	}
 	if len(list) != 1 {
 		t.Fatalf("duplicate grew history to %d; want idempotent size 1", len(list))
+	}
+}
+
+func TestMemory_DuplicateNilAndEmptyEvidenceKeepsFirstSeen(t *testing.T) {
+	// observation.Compare treats nil Evidence and &Evidence{} as equal keys.
+	s := store.NewMemory()
+	t0 := time.Date(2026, 10, 7, 9, 30, 0, 0, time.UTC)
+	first := mustObs(t, "cache2", observation.StatusHealthy, t0, t0, "stackstatus")
+	// first.Evidence is nil
+	if err := s.Append(first); err != nil {
+		t.Fatal(err)
+	}
+	second := mustObs(t, "cache2", observation.StatusHealthy, t0, t0, "stackstatus")
+	second.Evidence = &observation.Evidence{} // Compare-equal to nil
+	if observation.Compare(first, second) != 0 {
+		t.Fatal("precondition: nil and empty Evidence must Compare equal")
+	}
+	if err := s.Append(second); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.List("cache2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("Compare-equal duplicate grew history to %d", len(list))
+	}
+	if list[0].Evidence != nil {
+		t.Fatalf("first-seen nil Evidence was replaced: %+v", list[0].Evidence)
 	}
 }
 
@@ -322,5 +352,45 @@ func TestMemory_ListRequiresTrimmedServiceID(t *testing.T) {
 	if strings.Contains(strings.ToLower(err.Error()), "token") ||
 		strings.Contains(strings.ToLower(err.Error()), "password") {
 		t.Fatalf("unexpected secret-like error text: %v", err)
+	}
+}
+
+func TestMemory_ConcurrentAppendAndRead(t *testing.T) {
+	s := store.NewMemory()
+	base := time.Date(2026, 10, 7, 14, 0, 0, 0, time.UTC)
+	fixtures := make([]observation.Observation, 32)
+	for i := range fixtures {
+		fixtures[i] = mustObs(t, "race", observation.StatusHealthy, base.Add(time.Duration(i)*time.Second), base, "stackstatus")
+	}
+	var wg sync.WaitGroup
+	for i := range fixtures {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if err := s.Append(fixtures[i]); err != nil {
+				t.Errorf("Append %d: %v", i, err)
+			}
+			if _, err := s.List("race"); err != nil {
+				t.Errorf("List %d: %v", i, err)
+			}
+			if _, _, err := s.Latest("race"); err != nil {
+				t.Errorf("Latest %d: %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	list, err := s.List("race")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 32 {
+		t.Fatalf("after concurrent appends List len = %d, want 32", len(list))
+	}
+	latest, ok, err := s.Latest("race")
+	if err != nil || !ok {
+		t.Fatalf("Latest: ok=%v err=%v", ok, err)
+	}
+	if !latest.ObservedAt.Equal(base.Add(31 * time.Second)) {
+		t.Fatalf("Latest ObservedAt = %v, want newest", latest.ObservedAt)
 	}
 }

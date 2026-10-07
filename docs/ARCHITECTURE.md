@@ -116,17 +116,21 @@ flowchart LR
     DBX["Databricks optional"]
   end
 
-  SS --> ADAPT --> OBS --> HIST
+  SS -.-> ADAPT -.-> OBS -.-> HIST
   SL -.-> OBS
   HIST --> MEM
   HIST -.-> FILE
   HIST -.-> DBX
-  OBS --> INV
-  HIST --> BASE
-  DEP --> INV
-  INV --> AGENT
+  OBS -.-> INV
+  HIST -.-> BASE
+  DEP -.-> INV
+  INV -.-> AGENT
   DEP -.-> DBX
 ```
+
+Solid edges mark implemented package relationships that already exist in-tree
+(`store.Memory` backs `Store`). Dashed edges are planned callers/integration
+(not yet wired into CLI/`perch status`).
 
 | Module | Intent | Databricks |
 |--------|--------|------------|
