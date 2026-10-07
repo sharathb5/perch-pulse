@@ -219,6 +219,36 @@ func TestFromNodeReport_probeTimeoutIsUnavailable(t *testing.T) {
 	}
 }
 
+func TestFromNodeReport_apiTransportFailureIsUnavailable(t *testing.T) {
+	row := stackstatus.NodeReport{
+		Name:         "api",
+		Provider:     "openai",
+		Healthy:      false,
+		StatusSource: stackstatus.SourceAPI,
+		Configured:   true,
+		Detail:       `provider: http: Get "https://api.openai.com/v1/models": EOF`,
+	}
+	obs := stackstatusadapt.FromNodeReport(row, testOpts(t))
+	if obs.Status != observation.StatusUnavailable {
+		t.Fatalf("status = %s, want unavailable", obs.Status)
+	}
+}
+
+func TestFromNodeReport_api503ResponseIsUnhealthy(t *testing.T) {
+	row := stackstatus.NodeReport{
+		Name:         "api",
+		Provider:     "openai",
+		Healthy:      false,
+		StatusSource: stackstatus.SourceAPI,
+		Configured:   true,
+		Detail:       "provider: http 503 Service Unavailable: upstream error",
+	}
+	obs := stackstatusadapt.FromNodeReport(row, testOpts(t))
+	if obs.Status != observation.StatusUnhealthy {
+		t.Fatalf("status = %s, want unhealthy", obs.Status)
+	}
+}
+
 func TestFromNodeReport_redactsURLDetailsInEvidence(t *testing.T) {
 	row := stackstatus.NodeReport{
 		Name:         "rt",
@@ -231,6 +261,21 @@ func TestFromNodeReport_redactsURLDetailsInEvidence(t *testing.T) {
 	obs := stackstatusadapt.FromNodeReport(row, testOpts(t))
 	if obs.Evidence == nil || !strings.Contains(obs.Evidence.Summary, "redacted") {
 		t.Fatalf("evidence = %+v, want redacted summary", obs.Evidence)
+	}
+}
+
+func TestFromNodeReport_redactsUnknownResponseBodyInEvidence(t *testing.T) {
+	row := stackstatus.NodeReport{
+		Name:         "api",
+		Provider:     "stripe",
+		Healthy:      false,
+		StatusSource: stackstatus.SourceAPI,
+		Configured:   true,
+		Detail:       `provider: http 401 Unauthorized: {"error":"invalid api key sk_live_secret"}`,
+	}
+	obs := stackstatusadapt.FromNodeReport(row, testOpts(t))
+	if obs.Evidence == nil || strings.Contains(obs.Evidence.Summary, "sk_live") {
+		t.Fatalf("evidence must not echo response body: %+v", obs.Evidence)
 	}
 }
 

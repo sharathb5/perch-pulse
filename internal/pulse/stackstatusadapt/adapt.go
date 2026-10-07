@@ -99,8 +99,13 @@ func noUsableSignal(row stackstatus.NodeReport) bool {
 	if probeSetupFailure(row.Detail) || noUsableSignalFailure(row.Detail) {
 		return true
 	}
-	if row.StatusSource == stackstatus.SourceAPI && strings.Contains(strings.ToLower(row.Detail), "missing credential") {
-		return true
+	if row.StatusSource == stackstatus.SourceAPI {
+		if strings.Contains(strings.ToLower(row.Detail), "missing credential") {
+			return true
+		}
+		if apiProbeNoUsableSignal(row.Detail) {
+			return true
+		}
 	}
 	return false
 }
@@ -137,8 +142,25 @@ func noUsableSignalFailure(detail string) bool {
 		"network is unreachable",
 		"client.timeout",
 		"context deadline exceeded",
+		" eof",
 	} {
 		if strings.Contains(d, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+func apiProbeNoUsableSignal(detail string) bool {
+	d := strings.ToLower(strings.TrimSpace(detail))
+	if d == "" {
+		return false
+	}
+	if strings.Contains(d, "provider: http:") && !strings.Contains(d, "provider: http 2") {
+		return true
+	}
+	for _, code := range []string{"401", "403", "408", "429"} {
+		if strings.Contains(d, "http "+code) || strings.Contains(d, "http "+code+" ") {
 			return true
 		}
 	}
@@ -181,12 +203,54 @@ func sanitizeDetail(detail string) string {
 		return ""
 	}
 	if urlLikeDetail.MatchString(d) || secretQuery.MatchString(d) {
-		lower := strings.ToLower(d)
-		if strings.Contains(lower, "401") || strings.Contains(lower, "403") ||
-			strings.Contains(lower, "unauthorized") || strings.Contains(lower, "forbidden") {
-			return "credential invalid or expired"
-		}
-		return "probe error (detail redacted)"
+		return redactedProbeDetail(d)
 	}
-	return d
+	if isAllowlistedDetail(d) {
+		return d
+	}
+	return "status detail (redacted)"
+}
+
+func redactedProbeDetail(d string) string {
+	lower := strings.ToLower(d)
+	if strings.Contains(lower, "401") || strings.Contains(lower, "403") ||
+		strings.Contains(lower, "unauthorized") || strings.Contains(lower, "forbidden") {
+		return "credential invalid or expired"
+	}
+	return "probe error (detail redacted)"
+}
+
+func isAllowlistedDetail(detail string) bool {
+	d := strings.TrimSpace(strings.ToLower(detail))
+	if d == "" {
+		return false
+	}
+	for _, prefix := range []string{
+		"probe timed out",
+		"credential invalid or expired",
+		"missing credential",
+		"node needs a ",
+		"custom health command failed",
+		"no http status probe",
+		"credential present; probe not scheduled",
+		"deployable host status api not implemented yet",
+		"probe error:",
+		"signed probe not configured",
+		"need pusher_key",
+		"inngest_dev=1",
+		"database_url points at neon",
+		"configured from project .env",
+	} {
+		if strings.HasPrefix(d, prefix) || strings.Contains(d, prefix) {
+			return true
+		}
+	}
+	if strings.HasPrefix(d, "project ") || strings.HasPrefix(d, "pusher http ") {
+		return true
+	}
+	if strings.HasPrefix(d, "provider: http ") {
+		// Vendor HTTP status line without echoing response body beyond status code.
+		return !strings.Contains(d, ": {") && len(d) < 120
+	}
+	return false
 }
