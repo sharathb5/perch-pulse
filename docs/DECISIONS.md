@@ -28,6 +28,21 @@ Rules:
 
 ---
 
+## ADR-006: Typed Pulse observation with derived staleness
+
+**Date:** 2026-10-07  
+**Status:** Accepted
+
+**Context:** Issue #3 needs a first Pulse data primitive that preserves observation time and never treats stale or missing telemetry as current healthy status. Live collectors (`stackstatus`, etc.) remain unchanged.
+
+**Decision:** Add `internal/pulse/observation` as an optional, I/O-free contract package. Producer `Status` is a constrained string type (`healthy`, `degraded`, `unhealthy`, `unavailable`, plus zero-value unknown). `StatusStale` is derived-only (`Validate` rejects it as a stored producer status) via `IsStale` / `EffectiveStatus` from `ObservedAt` and an explicit freshness threshold (age >= threshold, non-positive threshold, zero `ObservedAt`, or future `ObservedAt` → stale). `Latest` / `Compare` order by `ObservedAt`, then `IngestedAt`, then identity fields, then **severity** (worse/uncertain wins equal-time conflicts so lexical `"healthy" > "degraded"` cannot win), then evidence strings—never by arrival/slice order. Evidence carries only non-secret `Ref` / `Summary`; field-name guards exist in tests, but string-content redaction stays at the producer boundary.
+
+**Consequences:** Callers must pass an explicit `now` and freshness duration; wiring collectors into observations is a follow-up. Historical storage and UI are out of scope. Content-level secret scanning is not implemented here.
+
+**Alternatives considered:** Overload `stackstatus.NodeReport` (rejected: mixes live probe rows with Pulse history semantics); store staleness as the only status field (rejected: loses underlying healthy/degraded signal); lexical status tie-break (rejected after Codex review: preferred healthy over degraded).
+
+---
+
 ## ADR-005: Pin gosec and govulncheck versions in `make security`
 
 **Date:** 2026-10-07  

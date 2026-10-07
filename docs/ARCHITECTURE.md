@@ -78,9 +78,17 @@ See [`CODEBASE_GUIDE.md`](CODEBASE_GUIDE.md) for flows and known bug surfaces.
 
 ---
 
-## Part B — Proposed Pulse architecture (not implemented)
+## Part B — Pulse architecture
 
-Keep Pulse modular and optional relative to Part A. Prefer future packages such as `internal/pulse/...` over overloading `stackstatus`.
+Keep Pulse modular and optional relative to Part A. Prefer packages under `internal/pulse/...` over overloading `stackstatus`.
+
+### Implemented
+
+| Module | Path | Intent |
+|--------|------|--------|
+| Observation contract | `internal/pulse/observation` | Typed service signal with explicit timestamps and derived freshness (`IsStale` / `EffectiveStatus`). No I/O; collectors not yet wired. |
+
+### Proposed (not implemented)
 
 ```mermaid
 flowchart LR
@@ -90,7 +98,8 @@ flowchart LR
     G["graph"]
   end
 
-  subgraph pulse["Proposed Pulse modules"]
+  subgraph pulse["Pulse"]
+    OBS["observation (implemented)"]
     INV["Investigation / evidence"]
     BASE["Baseline store"]
     DEP["Deploy impact"]
@@ -102,9 +111,9 @@ flowchart LR
     DBX["Databricks optional"]
   end
 
-  SS --> INV
-  SL --> INV
-  G --> INV
+  SS -.-> OBS
+  SL -.-> OBS
+  OBS --> INV
   SS --> BASE
   DEP --> INV
   INV --> AGENT
