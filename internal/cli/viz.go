@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -347,22 +348,78 @@ func spaHandler(root fs.FS) http.Handler {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-		upath := path.Clean(r.URL.Path)
-		if upath == "." || upath == "/" {
-			upath = "index.html"
-		} else {
-			upath = strings.TrimPrefix(upath, "/")
+		// Reject ".." elements in the raw URL path (same precaution as http.ServeFileFS).
+		if pathContainsDotDot(r.URL.Path) {
+			http.Error(w, "invalid URL path", http.StatusBadRequest)
+			return
 		}
-		if _, err := fs.Stat(root, upath); err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				upath = "index.html"
-			} else {
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				return
-			}
-		}
-		http.ServeFileFS(w, r, root, upath)
+		name := resolveSPAPath(r.URL.Path)
+		serveEmbeddedFile(w, r, root, name)
 	})
+}
+
+// resolveSPAPath maps a request URL path to a relative name safe for fs.FS.Open.
+// Unknown client routes fall through to index.html (SPA).
+func resolveSPAPath(requestPath string) string {
+	cleaned := path.Clean("/" + strings.TrimPrefix(requestPath, "/"))
+	if cleaned == "/" {
+		return "index.html"
+	}
+	rel := strings.TrimPrefix(cleaned, "/")
+	if !fs.ValidPath(rel) {
+		return "index.html"
+	}
+	return rel
+}
+
+func pathContainsDotDot(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// serveEmbeddedFile opens name from root after fs.ValidPath checks and streams it
+// with ServeContent. This avoids passing request-tainted paths into ServeFileFS
+// (gosec G703) while keeping the SPA fallback for missing assets.
+func serveEmbeddedFile(w http.ResponseWriter, r *http.Request, root fs.FS, name string) {
+	if !fs.ValidPath(name) {
+		name = "index.html"
+	}
+	f, err := openSPAFile(root, name)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	rs, ok := f.(io.ReadSeeker)
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	http.ServeContent(w, r, path.Base(stat.Name()), stat.ModTime(), rs)
+}
+
+func openSPAFile(root fs.FS, name string) (fs.File, error) {
+	f, err := root.Open(name)
+	if err == nil {
+		st, sterr := f.Stat()
+		if sterr == nil && !st.IsDir() {
+			return f, nil
+		}
+		_ = f.Close()
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	return root.Open("index.html")
 }
 
 // openBrowser launches the default browser for a perch viz URL.
