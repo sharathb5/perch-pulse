@@ -1,0 +1,76 @@
+# Optional Perch graph for a locally running Astronomy Shop (Phase 2).
+# Pulse service_ids use astronomy/local/<otel-name> — see
+# internal/pulse/astronomy/service-mapping.yaml and docs/astronomy-shop.md.
+#
+# Most shop RPCs are not published on the host; health checks use the Envoy
+# frontend-proxy (:8080) or docker container state. No cloud credentials required.
+name: perch-astronomy-shop
+environments:
+  local:
+    frontend-proxy:
+      provider: custom
+      status: "curl -sf --max-time 5 http://127.0.0.1:8080/ >/dev/null"
+      logs: "docker logs --tail 100 frontend-proxy 2>&1 || true"
+    frontend:
+      provider: custom
+      status: "docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' frontend 2>/dev/null | grep -Eq '^(healthy|running)$'"
+      logs: "docker logs --tail 100 frontend 2>&1 || true"
+    checkout:
+      provider: custom
+      status: "docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' checkout 2>/dev/null | grep -Eq '^(healthy|running)$'"
+      logs: "docker logs --tail 100 checkout 2>&1 || true"
+    cart:
+      provider: custom
+      status: "docker inspect -f '{{.State.Status}}' cart 2>/dev/null | grep -Eq '^running$'"
+      logs: "docker logs --tail 100 cart 2>&1 || true"
+    product-catalog:
+      provider: custom
+      status: "docker inspect -f '{{.State.Status}}' product-catalog 2>/dev/null | grep -Eq '^running$'"
+      logs: "docker logs --tail 100 product-catalog 2>&1 || true"
+    payment:
+      provider: custom
+      status: "docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' payment 2>/dev/null | grep -Eq '^(healthy|running)$'"
+      logs: "docker logs --tail 100 payment 2>&1 || true"
+    shipping:
+      provider: custom
+      status: "docker inspect -f '{{.State.Status}}' shipping 2>/dev/null | grep -Eq '^running$'"
+      logs: "docker logs --tail 100 shipping 2>&1 || true"
+    currency:
+      provider: custom
+      status: "docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' currency 2>/dev/null | grep -Eq '^(healthy|running)$'"
+      logs: "docker logs --tail 100 currency 2>&1 || true"
+    recommendation:
+      provider: custom
+      status: "docker inspect -f '{{.State.Status}}' recommendation 2>/dev/null | grep -Eq '^running$'"
+      logs: "docker logs --tail 100 recommendation 2>&1 || true"
+    ad:
+      provider: custom
+      status: "docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ad 2>/dev/null | grep -Eq '^(healthy|running)$'"
+      logs: "docker logs --tail 100 ad 2>&1 || true"
+    otel-collector:
+      provider: custom
+      status: "docker inspect -f '{{.State.Status}}' otel-collector 2>/dev/null | grep -Eq '^running$'"
+      logs: "docker logs --tail 100 otel-collector 2>&1 || true"
+    jaeger:
+      provider: custom
+      status: "curl -sf --max-time 5 http://127.0.0.1:8080/jaeger/ui/ >/dev/null"
+      logs: "docker logs --tail 100 jaeger 2>&1 || true"
+edges:
+  - frontend-proxy -> frontend
+  - frontend -> checkout
+  - frontend -> cart
+  - frontend -> product-catalog
+  - frontend -> shipping
+  - frontend -> currency
+  - frontend -> recommendation
+  - frontend -> ad
+  - checkout -> cart
+  - checkout -> payment
+  - checkout -> shipping
+  - checkout -> currency
+  - checkout -> product-catalog
+  - checkout -> email
+  - recommendation -> product-catalog
+  - frontend -> otel-collector
+  - checkout -> otel-collector
+  - otel-collector -> jaeger

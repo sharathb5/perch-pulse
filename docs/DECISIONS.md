@@ -28,6 +28,21 @@ Rules:
 
 ---
 
+## ADR-009: Astronomy Shop as Phase 2 local target with `astronomy/<env>/<name>` IDs
+
+**Date:** 2026-10-07  
+**Status:** Accepted
+
+**Context:** Issue #9 needs a realistic local distributed system for Phase 2 without Databricks, fault injection, or changing Pulse observation/store semantics. The OpenTelemetry Astronomy Shop is the chosen target; identities must be stable for future collectors.
+
+**Decision:** Treat Astronomy Shop as an **external** pinned dependency (git tag **3.1.0**, not vendored). Default local run is upstream `make start-minimal` (core shop + observability; no Kafka group). Document topology/telemetry from that pin. Pulse `service_id` values use `astronomy/<environment>/<name>` with `environment=local` for Compose; app names match `OTEL_SERVICE_NAME` (including `frontend-web`); infra without a demo OTEL name uses `infra/<component>`. Authoritative table lives in `internal/pulse/astronomy/service-mapping.yaml` and is validated by Go tests. Live Docker verify is scripted but not part of `make verify`.
+
+**Consequences:** Setup is reproducible via `examples/astronomy-shop/scripts/*`. CI stays light. Future collectors can adopt IDs without renaming. Upstream `DEMO_VERSION=latest` images may still move under a git pin.
+
+**Alternatives considered:** Vendor the full demo (rejected: huge tree, license/churn); full `make start` as default (rejected: higher RAM/disk for Phase 2 setup); reuse bare OTEL names as ServiceIDs (rejected: collide with other envs / lack product prefix).
+
+---
+
 ## ADR-008: In-memory local Pulse observation store
 
 **Date:** 2026-10-07  
