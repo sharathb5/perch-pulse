@@ -228,19 +228,26 @@ If live verify cannot run (Docker down, insufficient disk/RAM), the script exits
 
 ### Live attempt notes (this machine / PR)
 
-**First attempt:** `make start-minimal` against pin **3.1.0** pulled many demo images, then failed with host disk exhaustion (`no space left on device` / overlay extract I/O error) during large layers (e.g. Grafana). The host became unstable and Docker was force-quit.
+**First attempt:** `make start-minimal` against pin **3.1.0** pulled many demo images, then failed with host disk exhaustion (`no space left on device` / overlay extract I/O error) during large layers (e.g. Grafana). The host became unstable and Docker was force-quit. VM console later showed `EXT4-fs (vda1): failed to convert unwritten extents … potential data loss!` and an unresponsive engine API.
 
-**Resume (after reclaiming ~33 GiB free):** Demo checkout at tag `3.1.0` is intact under `examples/astronomy-shop/.demo`. Docker Desktop processes were running, but the engine API did not respond (`docker info` / `docker version` server side timed out). VM console logs from the crash show `EXT4-fs (vda1): failed to convert unwritten extents … potential data loss!`. Per resource-safety rules, live start/verify was **stopped** (no further pulls, rebuilds, or prune). Local disk image `Docker.raw` is ~9 GiB (partial prior pull state; not queried further while the daemon is unstable).
+**Docker recovery (2026-10-08):** Host free space restored (~30–35 GiB). Stale Docker Desktop processes were force-quit (no prune / no VM reset / `Docker.raw` not deleted). After one reopen, `docker info` responded, guest EXT4 remounted r/w, and a small `alpine` write test succeeded.
 
-When Docker is healthy again, re-run:
+**Second live start (2026-10-08, after Docker recovery):** Demo pin **3.1.0** checkout intact. Prefer-cache start: only missing images `latest-frontend` and `latest-opensearch` were re-pulled (~33 GiB free). `./examples/astronomy-shop/scripts/start.sh` (`make start-minimal`) created the Compose project, then:
 
-```bash
-./examples/astronomy-shop/scripts/clone.sh
-./examples/astronomy-shop/scripts/start.sh
-./examples/astronomy-shop/scripts/verify-live.sh
-```
+- `astronomy-db` briefly failed health during init (`init.sql: Input/output error`); later became healthy.
+- Observability containers entered **restart loops** reading bind-mounted configs via virtiofs:
+  - `jaeger`: `read /etc/jaeger/config.yml: input/output error`
+  - `prometheus`: `read /etc/prometheus/prometheus-config.yaml: input/output error`
+  - `grafana`: `read /etc/grafana/grafana.ini: input/output error`
+  - `otel-collector`: `read /etc/otelcol-config.yml: input/output error`
+- The same files are readable on the host (`examples/astronomy-shop/.demo/src/...`). Classification: **Docker Desktop virtiofs / residual VM corruption**, not upstream Astronomy Shop compose and not Perch mapping bugs.
+- Per resource-safety rules, restart loops were stopped with `./examples/astronomy-shop/scripts/stop.sh` (volumes preserved). `verify-live.sh` was **not** run (stack never reached a healthy frontend). Free disk at stop: ~32 GiB. Daemon still healthy.
 
-Ensure **≥14 GB free disk** (upstream full guidance) before the first pull, and recover/restart Docker Desktop if the VM filesystem was corrupted. Mapping accuracy does not depend on a successful local pull: OTEL service names were taken from the pinned compose files at tag **3.1.0**.
+**Not yet verified live:** frontend reachability, Jaeger service names, Prometheus metrics, OpenSearch logs, collector export path.
+
+Smallest safe next step (requires explicit approval): restart Docker Desktop once more to refresh virtiofs, then one `start.sh` + `verify-live.sh`. If bind-mount I/O errors persist, escalate to Docker Desktop Troubleshoot “Clean / Purge data” or VM reset (loses local images/volumes)—do **not** delete `Docker.raw` manually.
+
+Mapping accuracy does not depend on a successful local run: OTEL service names were taken from the pinned compose files at tag **3.1.0**.
 
 ## Secrets and safety
 
@@ -253,7 +260,7 @@ Ensure **≥14 GB free disk** (upstream full guidance) before the first pull, an
 
 - Upstream `DEMO_VERSION=latest` image tags may move even when git is pinned to 3.1.0
 - Disk/RAM requirements can block first-time pulls on constrained machines
-- Docker Desktop VM disk corruption after host disk-full events can leave the engine unresponsive until Docker is recovered/reset (agent scripts bound `docker info` with a timeout and will fail fast)
+- Docker Desktop VM disk corruption after host disk-full events can leave the engine unresponsive, or leave virtiofs bind mounts returning `input/output error` even when `docker info` works (agent scripts bound `docker info` with a timeout and will fail fast; live start must still be stopped on restart loops)
 - Feature-flag scheduler in newer demo versions can change failure modes without Perch involvement
 - React Native app is documented upstream but is not part of the default Compose shop path used here
 - `examples/astronomy-shop/scripts/stop.sh` deliberately does **not** wipe volumes; use upstream `make stop` only when intentional data wipe is desired
