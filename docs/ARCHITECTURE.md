@@ -91,9 +91,13 @@ Keep Pulse modular and optional relative to Part A. Prefer packages under `inter
 | Local observation store | `internal/pulse/store` | Process-local `Memory` history behind a `Store` interface (`Append` / `List` / `Latest`); no Databricks. |
 | Astronomy Shop mapping | `internal/pulse/astronomy` | Phase 2 local target identity map (`astronomy/<env>/<name>`) for OpenTelemetry Demo pin 3.1.0; no runtime collectors. |
 | Scenario ground truth | `internal/pulse/scenario` | Versioned fault/control labels + flagd harness for Astronomy Shop; **not** a detector; never written into observation/store. |
+| Telemetry source | `internal/pulse/telem` | Replaceable sample collectors; Prometheus spanmetrics first. |
+| Baseline detector | `internal/pulse/detect` | Explainable rolling-window regressions → `Finding`; **no** scenario import. |
+| Ground-truth evaluation | `internal/pulse/evaluate` | Scores findings vs completed scenario records **after** detection. |
 
 Phase 2 local target setup (docs/scripts, not a collector): [`astronomy-shop.md`](astronomy-shop.md), [`examples/astronomy-shop/`](../examples/astronomy-shop/).  
-Scenario harness: [`examples/astronomy-shop/scenarios/`](../examples/astronomy-shop/scenarios/).
+Scenario harness: [`examples/astronomy-shop/scenarios/`](../examples/astronomy-shop/scenarios/).  
+Detector eval: [`examples/astronomy-shop/eval/`](../examples/astronomy-shop/eval/).
 
 ### Proposed (not implemented)
 
@@ -110,8 +114,10 @@ flowchart LR
     ADAPT["stackstatusadapt (implemented)"]
     HIST["store.Memory (implemented)"]
     GT["scenario ground truth (implemented)"]
+    TELEM["telem.Prometheus (implemented)"]
+    DET["detect baseline (implemented)"]
+    EVAL["evaluate vs GT (implemented)"]
     INV["Investigation / evidence"]
-    BASE["Baseline analytics"]
     DEP["Deploy impact"]
     AGENT["Agent context packager"]
   end
@@ -127,15 +133,17 @@ flowchart LR
   HIST --> MEM
   HIST -.-> FILE
   HIST -.-> DBX
+  TELEM --> DET
+  DET --> EVAL
+  GT --> EVAL
   OBS -.-> INV
-  HIST -.-> BASE
+  DET -.-> DEP
   DEP -.-> INV
   INV -.-> AGENT
   DEP -.-> DBX
-  GT -.-> DEP
 ```
 
-Ground-truth (`scenario`) is evaluation substrate only: dashed into deploy-impact/detection means future scorers load labels **explicitly**, not via observation ingest.
+Ground-truth (`scenario`) feeds **evaluate only** after findings exist. `detect` never imports `scenario`.
 
 Solid edges mark implemented package relationships that already exist in-tree
 (`store.Memory` backs `Store`). Dashed edges are planned callers/integration

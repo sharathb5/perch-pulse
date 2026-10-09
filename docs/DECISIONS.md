@@ -28,6 +28,21 @@ Rules:
 
 ---
 
+## ADR-012: Explainable rolling-window baseline detector with post-hoc evaluation
+
+**Date:** 2026-10-09  
+**Status:** Accepted
+
+**Context:** Issue #13 needs the first Pulse regression detector against Astronomy Shop telemetry, with measurable evaluation against the Phase 2 ground-truth harness (#11), without label leakage, ML, Databricks, or causation claims.
+
+**Decision:** Add three packages: `internal/pulse/telem` (Prometheus HTTP `Source` for windowed spanmetrics: `latency_ms` as **p99** `histogram_quantile` over duration buckets — mean dilutes sparse 10s faults — plus `error_rate`/`call_rate` via ~2m `increase()`; emit explicit `0` error_rate/call_rate when Prometheus omits a series so healthy baselines exist), `internal/pulse/detect` (rolling median baseline vs current window with relative/absolute/MAD gates; typed `Finding` `pulse.finding.v1`; topology attribution via astronomy mapping only; latency gated by concurrent call_rate and max-ms sanity), and `internal/pulse/evaluate` (the **only** package that reads scenario records, and only after findings exist). Latency scenario uses `intlShippingSlowdown=10sec`→shipping. Control false positives count only latency/error findings on the labeled target (demo `call_rate` burstiness alone is not a control FP). Attribution scoring prefers findings on the labeled target when present. Evaluation credits only findings whose `first_detected_at` falls in the fault window (pre-existing ambient findings do not count). Baseline defaults: ~75s–3m history, ~40s current window, latency +100% with ≥1000ms absolute floor (p99 scale), error-rate +0.10 absolute with floor 0.05, outage via error_rate ≥0.35 or call_rate drop ≥55%. Live harness: `examples/astronomy-shop/eval/run-detector-eval.sh`. CI uses synthetic fixtures only.
+
+**Consequences:** Detector inputs are telemetry-only; evaluation can measure detection delay, attribution, control false positives, and recovery. Thresholds are demo-oriented and documented — not tuned inside a run from that run’s labels. Missing Prom series do not invent call_rate zeros; error_rate zeros require a concurrent call observation. Open findings are not marked recovered when current-window stats are unavailable (stale ≠ healthy). Future backends (file/Databricks) can implement `telem.Source`.
+
+**Alternatives considered:** ML anomaly models (rejected: opacity/overkill); embedding labels into observation evidence (rejected: leakage); cumulative counter averages (rejected: polluted by prior faults); requiring Astronomy Shop in CI (rejected: disk/time).
+
+---
+
 ## ADR-011: Bump Go toolchain to 1.27.2 for stdlib govulncheck gate
 
 **Date:** 2026-10-09  
@@ -50,7 +65,7 @@ Rules:
 
 **Context:** Issue #11 needs a reproducible evaluation substrate: inject known failures into Astronomy Shop, record hidden labels (what/when/who/type/path/recovery), and keep those labels out of Pulse observations so future detectors can be scored without label leakage. Disk/Docker safety forbids heavy CI pulls of the demo stack.
 
-**Decision:** Add `internal/pulse/scenario` with a versioned ground-truth `Record` (`pulse.scenario.v1`) and an embedded catalog of four scenarios driven only by OpenTelemetry Demo **3.1.0** flagd feature flags (`intlShippingSlowdown`, `paymentFailure`, `paymentUnreachable`, `emitRawPii` as mandatory negative control). Harness start/stop uses the flagd-ui HTTP API (read-modify-write `defaultVariant`) with explicit timeouts; persists records under `examples/astronomy-shop/scenarios/results/` (gitignored). Shell wrappers provide demo UX. CI covers schema/lifecycle/identity/secret/label-separation tests only; live verification is a separate script and not part of `make verify`. The package does **not** implement detection, does **not** write to `observation`/`store`, and must not be treated as an observation producer.
+**Decision:** Add `internal/pulse/scenario` with a versioned ground-truth `Record` (`pulse.scenario.v1`) and an embedded catalog of four scenarios driven only by OpenTelemetry Demo **3.1.0** flagd feature flags (`imageSlowLoad` / formerly intl shipping latency, `paymentFailure`, `paymentUnreachable`, `emitRawPii` as mandatory negative control). Harness start/stop uses the flagd-ui HTTP API (read-modify-write `defaultVariant`) with explicit timeouts; persists records under `examples/astronomy-shop/scenarios/results/` (gitignored). Shell wrappers provide demo UX. CI covers schema/lifecycle/identity/secret/label-separation tests only; live verification is a separate script and not part of `make verify`. The package does **not** implement detection, does **not** write to `observation`/`store`, and must not be treated as an observation producer.
 
 **Consequences:** Detector evaluation can load ground-truth explicitly. Flag-only injection avoids forking Astronomy Shop. Only one active run at a time (active.json lock). Upstream flag semantics / image drift under pin 3.1.0 remain an external risk.
 

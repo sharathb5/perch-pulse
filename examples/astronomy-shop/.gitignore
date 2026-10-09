@@ -5,3 +5,6 @@
 
 # Ground-truth scenario run artifacts (may contain local timestamps / evidence refs)
 scenarios/results/
+
+# Detector evaluation artifacts (findings + scores; local only)
+eval/results/

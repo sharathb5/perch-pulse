@@ -33,7 +33,7 @@ Live verify all catalog scenarios (activation + recovery; no LLM):
 
 | ID | Type | Class | Flag (flagd) | Active |
 |----|------|-------|--------------|--------|
-| `latency-shipping-intl` | latency | fault | `intlShippingSlowdown` | `5sec` |
+| `latency-shipping-intl` | latency | fault | `intlShippingSlowdown` | `10sec` |
 | `error-payment` | error_rate | fault | `paymentFailure` | `50%` |
 | `outage-payment` | dependency_outage | fault | `paymentUnreachable` | `on` |
 | `control-emit-raw-pii` | neutral | control | `emitRawPii` | `on` |

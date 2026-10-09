@@ -50,7 +50,15 @@ ASTRONOMY_MODE=full ./examples/astronomy-shop/scripts/start.sh
 ./examples/astronomy-shop/scenarios/verify-scenarios.sh
 ```
 
-See [`scenarios/README.md`](scenarios/README.md). Labels are evaluation-only (ADR-010); not a detector.
+See [`scenarios/README.md`](scenarios/README.md). Labels are evaluation-only (ADR-010).
+
+## Detector evaluation
+
+```bash
+./examples/astronomy-shop/eval/run-detector-eval.sh
+```
+
+See [`eval/README.md`](eval/README.md) and ADR-012.
 
 ## Validation without Docker
 

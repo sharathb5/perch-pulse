@@ -63,7 +63,7 @@ func TestInvalidDefinitionRejected(t *testing.T) {
 		Mechanism: scenario.Mechanism{
 			Kind:          scenario.MechanismFlagd,
 			Flag:          "intlShippingSlowdown",
-			ActiveVariant: "5sec",
+			ActiveVariant: "10sec",
 			IdleVariant:   "off",
 		},
 	}
