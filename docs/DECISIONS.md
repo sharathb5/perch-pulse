@@ -35,11 +35,11 @@ Rules:
 
 **Context:** `make verify` runs govulncheck against the active toolchain. Host Go **1.27.1** (and the prior `toolchain go1.25.9` directive under `GOTOOLCHAIN=auto`) reported multiple fixed-in-1.27.2 standard-library CVEs (HTTP/2 HPACK race, MIME/Range limits, TLS ECH, etc.), failing the security gate on both main and this branch before any scenario code ran.
 
-**Decision:** Set `toolchain go1.27.2` in `go.mod` so `GOTOOLCHAIN=auto` (as used by `make security`) selects a patched toolchain. Keep the language `go` version at **1.24.4** unless a separate migration requires raising it.
+**Decision:** Set `toolchain go1.27.2` in `go.mod` so analysis uses a patched toolchain. Keep the language `go` version at **1.24.4** unless a separate migration requires raising it. CI `actions/setup-go` installs **1.27.2** explicitly (not `go-version-file: go.mod`, which only reads the language line). `make security` sets `GOTOOLCHAIN=go1.27.2` so `go run` for gosec/govulncheck builds scanners with the same Go that loads this module.
 
-**Consequences:** Local/CI verify pulls 1.27.2 when needed. Future stdlib CVE waves will need deliberate toolchain bumps (same spirit as ADR-005 scanner pins).
+**Consequences:** Local/CI verify use 1.27.2 for scanners and package load. Future stdlib CVE waves need deliberate toolchain + CI + Makefile bumps together (same spirit as ADR-005 scanner pins).
 
-**Alternatives considered:** Weaken/skip govulncheck (rejected); pin older Go without the new vuln DB findings (rejected: leaves known CVEs).
+**Alternatives considered:** Weaken/skip govulncheck (rejected); pin older Go without the new vuln DB findings (rejected: leaves known CVEs); rely on `go-version-file` alone (rejected after CI: host 1.24.4 + tool min 1.26 caused govulncheck to run on go1.26.9 and fail parsing go1.27.2 stdlib).
 
 ---
 

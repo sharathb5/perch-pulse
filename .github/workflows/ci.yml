@@ -19,9 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Install the go.mod toolchain line (go1.27.2), not only the language
+      # `go 1.24.4` directive. setup-go's go-version-file reads the language
+      # version; with GOTOOLCHAIN=auto, `go run govulncheck@…` then built the
+      # scanner on go1.26.9 and failed to load the go1.27.2 stdlib (ADR-011).
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.27.2'
           cache: true
           cache-dependency-path: go.sum
 

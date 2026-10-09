@@ -9,6 +9,9 @@
 # Pin security scanners so the gate is reproducible across days.
 GOSEC_VERSION ?= v2.29.0
 GOVULNCHECK_VERSION ?= v1.8.0
+# Must match go.mod `toolchain` so `go run` builds scanners with the same Go
+# that analyzes this module (avoid host 1.24 + tool min 1.26 → go1.26.9 skew).
+GO_TOOLCHAIN ?= go1.27.2
 
 # --- Frontend ---------------------------------------------------------------
 
@@ -44,8 +47,8 @@ provider-validate:
 	go test ./internal/providerspec/... -count=1
 
 security:
-	GOTOOLCHAIN=auto go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -quiet -exclude=G304 ./...
-	GOTOOLCHAIN=auto go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -quiet -exclude=G304 ./...
+	GOTOOLCHAIN=$(GO_TOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 # --- Aggregate gate ---------------------------------------------------------
 

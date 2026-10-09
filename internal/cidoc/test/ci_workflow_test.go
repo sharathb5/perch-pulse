@@ -25,6 +25,8 @@ func TestGitHubActionsWorkflow(t *testing.T) {
 		"pull_request",
 		"push",
 		"main",
+		// Must match go.mod toolchain (not language `go` line via go-version-file).
+		"go-version: '1.27.2'",
 	} {
 		if !strings.Contains(s, needle) {
 			t.Errorf("ci.yml should reference %q", needle)
@@ -95,6 +97,8 @@ func TestMakefileVerifyTarget(t *testing.T) {
 		"exclude=G304",
 		"GOSEC_VERSION",
 		"GOVULNCHECK_VERSION",
+		"GO_TOOLCHAIN",
+		"go1.27.2",
 	} {
 		if !strings.Contains(s, needle) {
 			t.Errorf("Makefile should reference %q", needle)
