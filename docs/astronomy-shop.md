@@ -226,28 +226,25 @@ Optional Perch graph for localhost probes: [`examples/astronomy-shop/perch.yaml`
 
 If live verify cannot run (Docker down, insufficient disk/RAM), the script exits non-zero with a clear reason. That does not fail `make verify`.
 
-### Live attempt notes (this machine / PR)
+### Live verification (this machine / PR) — completed 2026-10-09
 
-**First attempt:** `make start-minimal` against pin **3.1.0** pulled many demo images, then failed with host disk exhaustion (`no space left on device` / overlay extract I/O error) during large layers (e.g. Grafana). The host became unstable and Docker was force-quit. VM console later showed `EXT4-fs (vda1): failed to convert unwritten extents … potential data loss!` and an unresponsive engine API.
+Earlier attempts were blocked by host disk exhaustion and Docker Desktop virtiofs bind-mount `input/output error` restart loops on observability configs (see git history / prior PR comments). After Docker Desktop **Clean / Purge** and a successful operator start of `make start-minimal`, live checks passed on this host:
 
-**Docker recovery (2026-10-08):** Host free space restored (~30–35 GiB). Stale Docker Desktop processes were force-quit (no prune / no VM reset / `Docker.raw` not deleted). After one reopen, `docker info` responded, guest EXT4 remounted r/w, and a small `alpine` write test succeeded.
+| Check | Result |
+|-------|--------|
+| `./examples/astronomy-shop/scripts/verify-live.sh` | **PASS** (exit 0); frontend HTTP 200; required containers running |
+| Frontend | `http://127.0.0.1:8080/` reachable |
+| Major shop services | Running; healthchecks healthy where defined (`frontend`, `checkout`, `product-catalog`, `payment`, …) |
+| OTEL collector | Running; exporting traces/metrics/logs (debug exporter shows continuous spans) |
+| Jaeger | UI `200`; services API at `/jaeger/ui/api/services` listed shop names including `frontend`, `frontend-web`, `checkout`, `cart`, `payment`, `product-catalog`, … (17 names). Matches mapping OTEL names for minimal mode (only `flagd-ui` absent from Jaeger at verify time — UI may be lightly traced). |
+| Prometheus | `/-/healthy` OK; **321** metric names via OTLP (not empty scrape targets); e.g. `demo_ad_requests_total`, `http_server_*`; `service_name` labels include mapped shop services |
+| OpenSearch | Cluster up (single-node **yellow**); index `otel-logs-2026-10-09` with thousands of docs. Collector occasionally logs upstream `mapper_parsing_exception` drops for some attribute shapes — path is live; not all records index cleanly |
 
-**Second live start (2026-10-08, after Docker recovery):** Demo pin **3.1.0** checkout intact. Prefer-cache start: only missing images `latest-frontend` and `latest-opensearch` were re-pulled (~33 GiB free). `./examples/astronomy-shop/scripts/start.sh` (`make start-minimal`) created the Compose project, then:
+`verify-live.sh` default Jaeger URL was corrected to `/jaeger/ui/api/services` (Envoy mounts the UI under `/jaeger/ui/`).
 
-- `astronomy-db` briefly failed health during init (`init.sql: Input/output error`); later became healthy.
-- Observability containers entered **restart loops** reading bind-mounted configs via virtiofs:
-  - `jaeger`: `read /etc/jaeger/config.yml: input/output error`
-  - `prometheus`: `read /etc/prometheus/prometheus-config.yaml: input/output error`
-  - `grafana`: `read /etc/grafana/grafana.ini: input/output error`
-  - `otel-collector`: `read /etc/otelcol-config.yml: input/output error`
-- The same files are readable on the host (`examples/astronomy-shop/.demo/src/...`). Classification: **Docker Desktop virtiofs / residual VM corruption**, not upstream Astronomy Shop compose and not Perch mapping bugs.
-- Per resource-safety rules, restart loops were stopped with `./examples/astronomy-shop/scripts/stop.sh` (volumes preserved). `verify-live.sh` was **not** run (stack never reached a healthy frontend). Free disk at stop: ~32 GiB. Daemon still healthy.
+Free disk at verify time: ~29 GiB. Stack was **not** restarted for verification.
 
-**Not yet verified live:** frontend reachability, Jaeger service names, Prometheus metrics, OpenSearch logs, collector export path.
-
-Smallest safe next step (requires explicit approval): restart Docker Desktop once more to refresh virtiofs, then one `start.sh` + `verify-live.sh`. If bind-mount I/O errors persist, escalate to Docker Desktop Troubleshoot “Clean / Purge data” or VM reset (loses local images/volumes)—do **not** delete `Docker.raw` manually.
-
-Mapping accuracy does not depend on a successful local run: OTEL service names were taken from the pinned compose files at tag **3.1.0**.
+Mapping accuracy was also cross-checked against pinned compose at tag **3.1.0**; live Jaeger names are a subset of that table (no unexpected shop service names).
 
 ## Secrets and safety
 
@@ -260,7 +257,7 @@ Mapping accuracy does not depend on a successful local run: OTEL service names w
 
 - Upstream `DEMO_VERSION=latest` image tags may move even when git is pinned to 3.1.0
 - Disk/RAM requirements can block first-time pulls on constrained machines
-- Docker Desktop VM disk corruption after host disk-full events can leave the engine unresponsive, or leave virtiofs bind mounts returning `input/output error` even when `docker info` works (agent scripts bound `docker info` with a timeout and will fail fast; live start must still be stopped on restart loops)
+- Docker Desktop VM disk corruption after host disk-full events can leave the engine unresponsive, or leave virtiofs bind mounts returning `input/output error` even when `docker info` works (mitigated here by Clean/Purge + successful live verify; agent scripts still bound `docker info` with a timeout and fail fast on restart loops)
 - Feature-flag scheduler in newer demo versions can change failure modes without Perch involvement
 - React Native app is documented upstream but is not part of the default Compose shop path used here
 - `examples/astronomy-shop/scripts/stop.sh` deliberately does **not** wipe volumes; use upstream `make stop` only when intentional data wipe is desired

@@ -5,7 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="${PERCH_ASTRONOMY_DEMO_DIR:-$ROOT/.demo}"
 BASE_URL="${ASTRONOMY_BASE_URL:-http://127.0.0.1:8080}"
-JAEGER_SERVICES_URL="${ASTRONOMY_JAEGER_SERVICES_URL:-$BASE_URL/jaeger/api/services}"
+# Jaeger UI is mounted under /jaeger/ui/; the services API is /jaeger/ui/api/services (not /jaeger/api/...).
+JAEGER_SERVICES_URL="${ASTRONOMY_JAEGER_SERVICES_URL:-$BASE_URL/jaeger/ui/api/services}"
 WAIT_SECS="${ASTRONOMY_VERIFY_WAIT_SECS:-180}"
 DOCKER_TIMEOUT_SECS="${ASTRONOMY_DOCKER_TIMEOUT_SECS:-15}"
 
