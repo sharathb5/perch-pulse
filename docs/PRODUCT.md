@@ -32,7 +32,7 @@ These capabilities ship in the current repository:
 
 Point-in-time probes and log fetches are the source of truth today. There is **no** warehouse-backed history, deploy-impact engine, or Pulse investigation API in-tree yet.
 
-**Phase 2 local target (setup/topology only):** OpenTelemetry Astronomy Shop can be run beside Perch via documented scripts; see [`astronomy-shop.md`](astronomy-shop.md). Fault injection and anomaly detection are not implemented yet.
+**Phase 2 local target:** OpenTelemetry Astronomy Shop can be run beside Perch via documented scripts; see [`astronomy-shop.md`](astronomy-shop.md). A **ground-truth scenario harness** (flagd-based fault injection + negative control) is available under `examples/astronomy-shop/scenarios/` — this is evaluation substrate, **not** anomaly detection.
 
 ---
 

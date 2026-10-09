@@ -298,5 +298,5 @@ telemetry:
       ui: http://localhost:8080/grafana/
   notes:
     - Local synthetic load from load-generator is not production scale.
-    - Feature-flag scenarios can change health behavior; fault injection is out of scope for this mapping issue.
+    - Feature-flag scenarios can change health behavior; ground-truth injection lives in internal/pulse/scenario (ADR-010), not in this mapping file.
     - Databricks is not used.

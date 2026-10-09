@@ -2,7 +2,7 @@ module github.com/yashg4509/perch
 
 go 1.24.4
 
-toolchain go1.25.9
+toolchain go1.27.2
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.4

@@ -28,6 +28,36 @@ Rules:
 
 ---
 
+## ADR-011: Bump Go toolchain to 1.27.2 for stdlib govulncheck gate
+
+**Date:** 2026-10-09  
+**Status:** Accepted
+
+**Context:** `make verify` runs govulncheck against the active toolchain. Host Go **1.27.1** (and the prior `toolchain go1.25.9` directive under `GOTOOLCHAIN=auto`) reported multiple fixed-in-1.27.2 standard-library CVEs (HTTP/2 HPACK race, MIME/Range limits, TLS ECH, etc.), failing the security gate on both main and this branch before any scenario code ran.
+
+**Decision:** Set `toolchain go1.27.2` in `go.mod` so `GOTOOLCHAIN=auto` (as used by `make security`) selects a patched toolchain. Keep the language `go` version at **1.24.4** unless a separate migration requires raising it.
+
+**Consequences:** Local/CI verify pulls 1.27.2 when needed. Future stdlib CVE waves will need deliberate toolchain bumps (same spirit as ADR-005 scanner pins).
+
+**Alternatives considered:** Weaken/skip govulncheck (rejected); pin older Go without the new vuln DB findings (rejected: leaves known CVEs).
+
+---
+
+## ADR-010: Ground-truth scenario harness via Astronomy Shop flagd (not a detector)
+
+**Date:** 2026-10-09  
+**Status:** Accepted
+
+**Context:** Issue #11 needs a reproducible evaluation substrate: inject known failures into Astronomy Shop, record hidden labels (what/when/who/type/path/recovery), and keep those labels out of Pulse observations so future detectors can be scored without label leakage. Disk/Docker safety forbids heavy CI pulls of the demo stack.
+
+**Decision:** Add `internal/pulse/scenario` with a versioned ground-truth `Record` (`pulse.scenario.v1`) and an embedded catalog of four scenarios driven only by OpenTelemetry Demo **3.1.0** flagd feature flags (`intlShippingSlowdown`, `paymentFailure`, `paymentUnreachable`, `emitRawPii` as mandatory negative control). Harness start/stop uses the flagd-ui HTTP API (read-modify-write `defaultVariant`) with explicit timeouts; persists records under `examples/astronomy-shop/scenarios/results/` (gitignored). Shell wrappers provide demo UX. CI covers schema/lifecycle/identity/secret/label-separation tests only; live verification is a separate script and not part of `make verify`. The package does **not** implement detection, does **not** write to `observation`/`store`, and must not be treated as an observation producer.
+
+**Consequences:** Detector evaluation can load ground-truth explicitly. Flag-only injection avoids forking Astronomy Shop. Only one active run at a time (active.json lock). Upstream flag semantics / image drift under pin 3.1.0 remain an external risk.
+
+**Alternatives considered:** Custom service chaos sidecars (rejected: fork risk); embedding labels into observation evidence (rejected: label leakage); pulling Astronomy Shop in CI (rejected: disk/time); LLM-based success checks (rejected: nondeterministic).
+
+---
+
 ## ADR-009: Astronomy Shop as Phase 2 local target with `astronomy/<env>/<name>` IDs
 
 **Date:** 2026-10-07  

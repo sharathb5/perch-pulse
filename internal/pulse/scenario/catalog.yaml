@@ -1,0 +1,98 @@
+# Embedded catalog of controlled Astronomy Shop fault / control scenarios.
+# Mechanisms use OpenTelemetry Demo 3.1.0 flagd feature flags only.
+# Ground-truth labels live here and in persisted Run records — never in
+# observation.Observation or store.Store payloads.
+
+schema_version: pulse.scenario.catalog.v1
+demo_pin: "3.1.0"
+environment: local
+flagd_api_base: http://127.0.0.1:8080/feature/api
+
+scenarios:
+  - id: latency-shipping-intl
+    type: latency
+    classification: fault
+    target_otel: shipping
+    description: >
+      Inject a 5s delay on international shipping responses via the
+      intlShippingSlowdown feature flag (OpenTelemetry Demo flagd).
+    mechanism:
+      kind: flagd
+      flag: intlShippingSlowdown
+      active_variant: "5sec"
+      idle_variant: "off"
+    expected_affected_otel:
+      - shipping
+      - frontend
+    expected_dependency_path_otel:
+      - frontend
+      - shipping
+    operator_notes: >
+      Latency injection is flag-driven and reversible. Load-generator traffic
+      should continue; expect elevated shipping latency in traces/metrics.
+
+  - id: error-payment
+    type: error_rate
+    classification: fault
+    target_otel: payment
+    description: >
+      Cause payment charge requests to fail ~50% of the time via paymentFailure.
+    mechanism:
+      kind: flagd
+      flag: paymentFailure
+      active_variant: "50%"
+      idle_variant: "off"
+    expected_affected_otel:
+      - payment
+      - checkout
+      - frontend
+    expected_dependency_path_otel:
+      - frontend
+      - checkout
+      - payment
+    operator_notes: >
+      Controlled error-rate increase on payment; checkout and frontend sit on
+      the expected dependency path.
+
+  - id: outage-payment
+    type: dependency_outage
+    classification: fault
+    target_otel: payment
+    description: >
+      Make the payment dependency unreachable from checkout via paymentUnreachable.
+    mechanism:
+      kind: flagd
+      flag: paymentUnreachable
+      active_variant: "on"
+      idle_variant: "off"
+    expected_affected_otel:
+      - payment
+      - checkout
+      - frontend
+    expected_dependency_path_otel:
+      - frontend
+      - checkout
+      - payment
+    operator_notes: >
+      Distinct from paymentFailure: models dependency unavailability rather than
+      application-level charge errors.
+
+  - id: control-emit-raw-pii
+    type: neutral
+    classification: control
+    target_otel: checkout
+    description: >
+      Negative control. Upstream flag emitRawPii is explicitly "Not a failure
+      scenario" — a labeled change that should not create a meaningful regression.
+    mechanism:
+      kind: flagd
+      flag: emitRawPii
+      active_variant: "on"
+      idle_variant: "off"
+    expected_affected_otel: []
+    expected_dependency_path_otel: []
+    operator_notes: >
+      Records that a change occurred while expecting broadly healthy telemetry.
+      Used later to measure false-positive detector rates. Does not imply that
+      emitting PII is desirable in production; demo-only flag for collector
+      redaction examples.

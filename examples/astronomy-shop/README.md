@@ -41,10 +41,21 @@ Default is **minimal + observability** (~3 GB RAM). For Kafka / accounting / fra
 ASTRONOMY_MODE=full ./examples/astronomy-shop/scripts/start.sh
 ```
 
+## Scenario harness (ground truth)
+
+```bash
+./examples/astronomy-shop/scenarios/scenario.sh list
+./examples/astronomy-shop/scenarios/scenario.sh start error-payment
+./examples/astronomy-shop/scenarios/scenario.sh stop
+./examples/astronomy-shop/scenarios/verify-scenarios.sh
+```
+
+See [`scenarios/README.md`](scenarios/README.md). Labels are evaluation-only (ADR-010); not a detector.
+
 ## Validation without Docker
 
 ```bash
-go test ./internal/pulse/astronomy/... -count=1
+go test ./internal/pulse/astronomy/... ./internal/pulse/scenario/... -count=1
 ```
 
 Live Docker verification is intentionally **not** part of `make verify` (too heavy for CI).

@@ -32,7 +32,7 @@ This directory holds **copy-paste-friendly sample projects** so you can exercise
 | [`scenarios/full-stack`](scenarios/full-stack) | **Committed `perch.yaml`** — run `status`, `graph`, `context`, and the TUI without running `init` first. Optional local health server for `custom` dev commands. |
 | [`scenarios/manual-cli-test`](scenarios/manual-cli-test) | **Two local health servers** — best default for exercising `dev` custom nodes, `graph`/`status`/`context`, and the TUI together (see scenario README). |
 | [`scenarios/full-platform`](scenarios/full-platform) | **Perch Brief** — 5‑min app + Perch CLI demo; one guide: [`README.md`](scenarios/full-platform/README.md). |
-| [`astronomy-shop`](astronomy-shop) | **Phase 2 target** — clone/start OpenTelemetry Astronomy Shop (pin 3.1.0) and map topology to Pulse IDs; see [`README.md`](astronomy-shop/README.md) and [`docs/astronomy-shop.md`](../docs/astronomy-shop.md). |
+| [`astronomy-shop`](astronomy-shop) | **Phase 2 target** — clone/start OpenTelemetry Astronomy Shop (pin 3.1.0), map topology to Pulse IDs, and run ground-truth fault scenarios; see [`README.md`](astronomy-shop/README.md), [`astronomy-shop/scenarios/`](astronomy-shop/scenarios/), and [`docs/astronomy-shop.md`](../docs/astronomy-shop.md). |
 | [`scenarios/_template`](scenarios/_template) | Checklist for **adding** a new scenario. |
 
 ## Quick commands (after `cd` into a scenario)

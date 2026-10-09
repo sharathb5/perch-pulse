@@ -90,8 +90,10 @@ Keep Pulse modular and optional relative to Part A. Prefer packages under `inter
 | Stack status adapter | `internal/pulse/stackstatusadapt` | Pure mapping from `stackstatus.NodeReport` / `EnvReport` into observations; does not change live collectors. |
 | Local observation store | `internal/pulse/store` | Process-local `Memory` history behind a `Store` interface (`Append` / `List` / `Latest`); no Databricks. |
 | Astronomy Shop mapping | `internal/pulse/astronomy` | Phase 2 local target identity map (`astronomy/<env>/<name>`) for OpenTelemetry Demo pin 3.1.0; no runtime collectors. |
+| Scenario ground truth | `internal/pulse/scenario` | Versioned fault/control labels + flagd harness for Astronomy Shop; **not** a detector; never written into observation/store. |
 
-Phase 2 local target setup (docs/scripts, not a collector): [`astronomy-shop.md`](astronomy-shop.md), [`examples/astronomy-shop/`](../examples/astronomy-shop/).
+Phase 2 local target setup (docs/scripts, not a collector): [`astronomy-shop.md`](astronomy-shop.md), [`examples/astronomy-shop/`](../examples/astronomy-shop/).  
+Scenario harness: [`examples/astronomy-shop/scenarios/`](../examples/astronomy-shop/scenarios/).
 
 ### Proposed (not implemented)
 
@@ -107,6 +109,7 @@ flowchart LR
     OBS["observation (implemented)"]
     ADAPT["stackstatusadapt (implemented)"]
     HIST["store.Memory (implemented)"]
+    GT["scenario ground truth (implemented)"]
     INV["Investigation / evidence"]
     BASE["Baseline analytics"]
     DEP["Deploy impact"]
@@ -129,7 +132,10 @@ flowchart LR
   DEP -.-> INV
   INV -.-> AGENT
   DEP -.-> DBX
+  GT -.-> DEP
 ```
+
+Ground-truth (`scenario`) is evaluation substrate only: dashed into deploy-impact/detection means future scorers load labels **explicitly**, not via observation ingest.
 
 Solid edges mark implemented package relationships that already exist in-tree
 (`store.Memory` backs `Store`). Dashed edges are planned callers/integration

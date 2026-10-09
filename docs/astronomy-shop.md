@@ -2,8 +2,8 @@
 
 This document establishes the [OpenTelemetry Astronomy Shop](https://opentelemetry.io/docs/demo/) as the **local Phase 2 target application** for Perch Pulse.
 
-**Scope of this doc:** reproducible local setup, actual service topology, telemetry surfaces, and Perch/Pulse service-ID mapping.  
-**Out of scope:** fault injection, anomaly/regression detection, Databricks, Pulse UI, and changes to observation/store semantics.
+**Scope of this doc:** reproducible local setup, actual service topology, telemetry surfaces, Perch/Pulse service-ID mapping, and the ground-truth scenario harness.  
+**Out of scope:** anomaly/regression detection, Databricks, Pulse UI, and changes to observation/store semantics.
 
 Machine-readable mapping: [`internal/pulse/astronomy/service-mapping.yaml`](../internal/pulse/astronomy/service-mapping.yaml)  
 Helper scripts: [`examples/astronomy-shop/`](../examples/astronomy-shop/)
@@ -217,14 +217,49 @@ Authoritative table: `internal/pulse/astronomy/service-mapping.yaml` (validated 
 
 Optional Perch graph for localhost probes: [`examples/astronomy-shop/perch.yaml`](../examples/astronomy-shop/perch.yaml).
 
+## Ground-truth scenario harness
+
+Controlled, reversible faults (and one negative control) are applied via the demo **flagd** feature flags — no Astronomy Shop fork. Typed records (`pulse.scenario.v1`) live in `internal/pulse/scenario` and are persisted under `examples/astronomy-shop/scenarios/results/` (gitignored). Labels must not be mixed into Pulse observations.
+
+| Scenario ID | Failure mode | Flag | Active variant |
+|-------------|--------------|------|----------------|
+| `latency-shipping-intl` | latency | `intlShippingSlowdown` | `5sec` |
+| `error-payment` | error rate | `paymentFailure` | `50%` |
+| `outage-payment` | dependency outage | `paymentUnreachable` | `on` |
+| `control-emit-raw-pii` | neutral (control) | `emitRawPii` | `on` |
+
+```bash
+./examples/astronomy-shop/scenarios/scenario.sh list
+./examples/astronomy-shop/scenarios/scenario.sh start error-payment
+./examples/astronomy-shop/scenarios/scenario.sh stop
+./examples/astronomy-shop/scenarios/verify-scenarios.sh   # live; not in CI
+```
+
+See [`examples/astronomy-shop/scenarios/README.md`](../examples/astronomy-shop/scenarios/README.md) and ADR-010.
+
 ## CI vs live verification
 
 | Check | Where |
 |-------|--------|
 | Mapping schema, uniqueness, required services, observation compatibility | `go test ./internal/pulse/astronomy/...` (part of `make verify`) |
+| Scenario schema, lifecycle, label separation, secrets | `go test ./internal/pulse/scenario/...` (part of `make verify`) |
 | Clone + `make start-minimal` + frontend/Jaeger | `./examples/astronomy-shop/scripts/verify-live.sh` (**not** in CI; Docker-heavy) |
+| Start/stop each catalog scenario + recovery | `./examples/astronomy-shop/scenarios/verify-scenarios.sh` (**not** in CI) |
 
 If live verify cannot run (Docker down, insufficient disk/RAM), the script exits non-zero with a clear reason. That does not fail `make verify`.
+
+### Scenario harness live verification — completed 2026-10-09
+
+Reused the already-running minimal stack (no rebuild). `./examples/astronomy-shop/scenarios/verify-scenarios.sh` with 15s dwell:
+
+| Scenario | Activation | Recovery | Notes |
+|----------|------------|----------|-------|
+| `latency-shipping-intl` | PASS (`intlShippingSlowdown=5sec`) | PASS → `off` | frontend + load-generator stayed up; Jaeger API reachable |
+| `error-payment` | PASS (`paymentFailure=50%`) | PASS → `off` | same |
+| `outage-payment` | PASS (`paymentUnreachable=on`) | PASS → `off` | same |
+| `control-emit-raw-pii` | PASS (`emitRawPii=on`) | PASS → `off` | negative control; labeled change, not a fault |
+
+Post-run: all four flags idle (`off`). Prometheus healthy; ground-truth JSON under `scenarios/results/` (gitignored). Free disk ~25–26 GiB during run.
 
 ### Live verification (this machine / PR) — completed 2026-10-09
 

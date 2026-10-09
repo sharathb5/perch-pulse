@@ -2,3 +2,6 @@
 .demo/
 .env.override
 *.log
+
+# Ground-truth scenario run artifacts (may contain local timestamps / evidence refs)
+scenarios/results/
