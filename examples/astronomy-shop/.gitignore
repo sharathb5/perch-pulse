@@ -1,0 +1,4 @@
+# Cloned OpenTelemetry Demo checkout (pin managed by scripts/clone.sh)
+.demo/
+.env.override
+*.log

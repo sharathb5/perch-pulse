@@ -1,0 +1,302 @@
+# Authoritative Astronomy Shop → Perch/Pulse service identity mapping.
+# Source topology: OpenTelemetry Demo (Astronomy Shop) git tag 3.1.0
+# https://github.com/open-telemetry/opentelemetry-demo/tree/3.1.0
+#
+# This file is validated by Go tests. Do not invent services not present
+# in the pinned demo compose files / official architecture docs.
+
+demo:
+  upstream: https://github.com/open-telemetry/opentelemetry-demo
+  pin: "3.1.0"
+  docs: https://opentelemetry.io/docs/demo/
+  # Default local mode for Perch Pulse Phase 2 setup (lower RAM; keeps o11y).
+  default_make_target: start-minimal
+  otel_service_namespace: opentelemetry-demo
+  frontend_url: http://localhost:8080/
+
+service_id:
+  # astronomy/<environment>/<name>
+  # environment for Docker Compose local runs is "local" (ENV_PLATFORM=local).
+  # App names match OTEL_SERVICE_NAME (or WEB_OTEL_SERVICE_NAME for frontend-web).
+  # Infra without a demo OTEL_SERVICE_NAME uses name "infra/<component>".
+  pattern: "astronomy/{environment}/{name}"
+  local_environment: local
+
+# Modes:
+#   minimal — compose.yaml + compose.observability.yaml (+ extras); no Kafka group
+#   full    — minimal + compose.full.yaml (accounting, fraud-detection, kafka)
+#   agentic — full + compose.agent.yaml (agent, mcp, chatbot)
+services:
+  # ---- Externally reachable via frontend-proxy (Envoy :8080) ----
+  - otel_service_name: frontend-proxy
+    compose_service: frontend-proxy
+    role: gateway
+    visibility: external
+    modes: [minimal, full, agentic]
+    description: Envoy reverse proxy for web store and observability UIs.
+
+  - otel_service_name: frontend
+    compose_service: frontend
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: TypeScript web store UI/API behind frontend-proxy.
+    depends_on_otel:
+      - ad
+      - cart
+      - currency
+      - checkout
+      - shipping
+      - product-catalog
+      - recommendation
+
+  - otel_service_name: frontend-web
+    compose_service: frontend
+    role: client
+    visibility: external
+    modes: [minimal, full, agentic]
+    description: Browser/web client resource name (WEB_OTEL_SERVICE_NAME).
+
+  - otel_service_name: load-generator
+    compose_service: load-generator
+    role: traffic
+    visibility: external
+    modes: [minimal, full, agentic]
+    description: Locust load generator; UI at /loadgen/. Synthetic traffic only.
+
+  - otel_service_name: flagd-ui
+    compose_service: flagd-ui
+    role: supporting
+    visibility: external
+    modes: [minimal, full, agentic]
+    description: Feature-flag configurator UI at /feature/.
+
+  - otel_service_name: telemetry-docs
+    compose_service: telemetry-docs
+    role: supporting
+    visibility: external
+    modes: [minimal, full, agentic]
+    description: Weaver-generated telemetry docs at /telemetry/.
+
+  # ---- Core shop services (internal) ----
+  - otel_service_name: ad
+    compose_service: ad
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+    depends_on_otel: [flagd]
+
+  - otel_service_name: cart
+    compose_service: cart
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+    depends_on_otel: [flagd]
+    depends_on_infra: [valkey-cart]
+
+  - otel_service_name: checkout
+    compose_service: checkout
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: Order orchestration; publishes to kafka only when full/agentic compose is running.
+    depends_on_otel:
+      - currency
+      - cart
+      - payment
+      - email
+      - product-catalog
+      - shipping
+      - flagd
+    # No kafka dependency here: kafka is full/agentic-only; see accounting/fraud-detection.
+
+  - otel_service_name: currency
+    compose_service: currency
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+
+  - otel_service_name: email
+    compose_service: email
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+
+  - otel_service_name: payment
+    compose_service: payment
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+    depends_on_otel: [flagd]
+
+  - otel_service_name: product-catalog
+    compose_service: product-catalog
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+    depends_on_infra: [astronomy-db]
+
+  - otel_service_name: quote
+    compose_service: quote
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+
+  - otel_service_name: recommendation
+    compose_service: recommendation
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+    depends_on_otel: [product-catalog, flagd]
+
+  - otel_service_name: shipping
+    compose_service: shipping
+    role: app
+    visibility: internal
+    modes: [minimal, full, agentic]
+    depends_on_otel: [quote]
+
+  - otel_service_name: image-provider
+    compose_service: image-provider
+    role: supporting
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: NGINX static product images.
+
+  - otel_service_name: flagd
+    compose_service: flagd
+    role: supporting
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: OpenFeature flag evaluation service.
+
+  # ---- Full-mode only (Kafka group) ----
+  - otel_service_name: accounting
+    compose_service: accounting
+    role: app
+    visibility: internal
+    modes: [full, agentic]
+    depends_on_otel: [kafka]
+    depends_on_infra: [astronomy-db]
+
+  - otel_service_name: fraud-detection
+    compose_service: fraud-detection
+    role: app
+    visibility: internal
+    modes: [full, agentic]
+    depends_on_otel: [kafka, flagd]
+
+  - otel_service_name: kafka
+    compose_service: kafka
+    role: messaging
+    visibility: internal
+    modes: [full, agentic]
+    description: Orders queue between checkout and accounting/fraud-detection.
+
+  # ---- Agentic mode only ----
+  - otel_service_name: agent
+    compose_service: agent
+    role: app
+    visibility: internal
+    modes: [agentic]
+    depends_on_otel: [mcp]
+
+  - otel_service_name: mcp
+    compose_service: mcp
+    role: app
+    visibility: internal
+    modes: [agentic]
+    depends_on_otel: [frontend]
+
+  - otel_service_name: chatbot
+    compose_service: chatbot
+    role: app
+    visibility: external
+    modes: [agentic]
+    depends_on_otel: [agent]
+    description: Gradio chat UI at /chatbot/.
+
+  # ---- Infra (no demo OTEL_SERVICE_NAME; Pulse id uses infra/<component>) ----
+  - otel_service_name: ""
+    infra_name: otel-collector
+    compose_service: otel-collector
+    role: infra
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: OTLP collector (gRPC 4317 / HTTP 4318); fans out traces/metrics/logs.
+
+  - otel_service_name: ""
+    infra_name: jaeger
+    compose_service: jaeger
+    role: infra
+    visibility: external
+    modes: [minimal, full, agentic]
+    description: Trace backend UI at /jaeger/ui/ (observability modes).
+
+  - otel_service_name: ""
+    infra_name: prometheus
+    compose_service: prometheus
+    role: infra
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: Metrics backend (scraped/OTLP write from collector).
+
+  - otel_service_name: ""
+    infra_name: opensearch
+    compose_service: opensearch
+    role: infra
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: Logs backend for collector log exporter.
+
+  - otel_service_name: ""
+    infra_name: grafana
+    compose_service: grafana
+    role: infra
+    visibility: external
+    modes: [minimal, full, agentic]
+    description: Dashboards at /grafana/.
+
+  - otel_service_name: ""
+    infra_name: opamp-server
+    compose_service: opamp-server
+    role: infra
+    visibility: external
+    modes: [minimal, full, agentic]
+    description: OpAMP UI at /opamp/.
+
+  - otel_service_name: ""
+    infra_name: astronomy-db
+    compose_service: astronomy-db
+    role: infra
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: PostgreSQL for product-catalog / accounting.
+
+  - otel_service_name: ""
+    infra_name: valkey-cart
+    compose_service: valkey-cart
+    role: infra
+    visibility: internal
+    modes: [minimal, full, agentic]
+    description: Valkey cache for cart.
+
+telemetry:
+  # Services export OTLP to the collector; backends are wired in observability mode.
+  export_protocol: OTLP
+  collector_grpc: "otel-collector:4317"
+  collector_http: "otel-collector:4318"
+  surfaces:
+    traces:
+      path: services → otel-collector → Jaeger
+      ui: http://localhost:8080/jaeger/ui/
+    metrics:
+      path: services → otel-collector → Prometheus (+ spanmetrics connector)
+      ui: http://localhost:8080/grafana/
+    logs:
+      path: services → otel-collector → OpenSearch
+      ui: http://localhost:8080/grafana/
+  notes:
+    - Local synthetic load from load-generator is not production scale.
+    - Feature-flag scenarios can change health behavior; fault injection is out of scope for this mapping issue.
+    - Databricks is not used.

@@ -89,6 +89,9 @@ Keep Pulse modular and optional relative to Part A. Prefer packages under `inter
 | Observation contract | `internal/pulse/observation` | Typed service signal with explicit timestamps and derived freshness (`IsStale` / `EffectiveStatus`). No I/O. |
 | Stack status adapter | `internal/pulse/stackstatusadapt` | Pure mapping from `stackstatus.NodeReport` / `EnvReport` into observations; does not change live collectors. |
 | Local observation store | `internal/pulse/store` | Process-local `Memory` history behind a `Store` interface (`Append` / `List` / `Latest`); no Databricks. |
+| Astronomy Shop mapping | `internal/pulse/astronomy` | Phase 2 local target identity map (`astronomy/<env>/<name>`) for OpenTelemetry Demo pin 3.1.0; no runtime collectors. |
+
+Phase 2 local target setup (docs/scripts, not a collector): [`astronomy-shop.md`](astronomy-shop.md), [`examples/astronomy-shop/`](../examples/astronomy-shop/).
 
 ### Proposed (not implemented)
 
