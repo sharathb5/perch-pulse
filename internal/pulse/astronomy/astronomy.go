@@ -95,6 +95,20 @@ func Load() (Mapping, error) {
 	return m, nil
 }
 
+// ValidateServiceIDShape reports whether id matches astronomy/<env>/<name>
+// or astronomy/<env>/infra/<component>. It does not require the id to appear
+// in the embedded mapping table.
+func ValidateServiceIDShape(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("astronomy: empty service id")
+	}
+	if !serviceIDRe.MatchString(id) {
+		return fmt.Errorf("astronomy: invalid service id %q", id)
+	}
+	return nil
+}
+
 // ServiceID builds astronomy/<environment>/<name>.
 func ServiceID(environment, name string) (string, error) {
 	environment = strings.TrimSpace(environment)
