@@ -132,7 +132,10 @@ export function PulseSidebar({
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 text-[11px] text-gray-700">
+      <div
+        data-testid="pulse-sidebar-scroll"
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-2 text-[11px] text-gray-700"
+      >
         {graphDemo && (
           <p data-testid="pulse-sidebar-demo" className="mb-2 text-amber-800">
             Graph is demo/last-known topology — Pulse below is not merged as live stack health.

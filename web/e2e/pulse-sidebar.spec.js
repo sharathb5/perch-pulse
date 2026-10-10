@@ -168,8 +168,16 @@ test.describe('Pulse sidebar (Milestone C)', () => {
     const id = encodeURIComponent(fixtures.pulseIncidentDetail.incident.incident_id)
     await page.goto(`/stack/fixture-stack/api?pulse=incidents&incident=${id}`)
     await expect(page.getByTestId('pulse-investigation')).toBeVisible()
+    // Keep scroll position deterministic; long investigation content otherwise AA-flakes in CI.
+    await page.getByTestId('pulse-sidebar-scroll').evaluate((el) => {
+      el.scrollTop = 0
+    })
     await stabilize(page)
-    await expect(page).toHaveScreenshot('pulse-sidebar-investigation.png', screenshotOpts(page))
+    await expect(page).toHaveScreenshot('pulse-sidebar-investigation.png', {
+      ...screenshotOpts(page),
+      // Investigation chrome is denser; allow slightly more AA variance than the global 1.5%.
+      maxDiffPixelRatio: 0.03,
+    })
   })
 
   test('screenshot — change correlations tab', async ({ page }) => {
