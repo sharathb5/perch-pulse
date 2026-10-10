@@ -28,6 +28,21 @@ Rules:
 
 ---
 
+## ADR-016: Pulse intelligence overlay on existing graph (Milestone B)
+
+**Date:** 2026-10-10  
+**Status:** Accepted
+
+**Context:** Issue #22 / parent #17 needs the React Flow graph to surface Pulse findings without replacing `/api/status` probe health, without redesigning cards/layout, and without inventing live telemetry when viz has `process_memory_unavailable`.
+
+**Decision:** Keep probe health in `deriveStatus` / `StatusPill`. Add `web/src/lib/pulse.js` adapters + `usePulseData` (15s bounded poll, 8s fetch timeout, in-flight guard) joining solely on backend `graph_node`. `PulseIndicator` / `PulseSection` use existing gray/amber/slate tokens; historical recovered incidents are slate “historical”, never danger-red. Incident navigation reuses `/stack/:stackName/:nodeId?incident=<encodeURIComponent(id)>` with a compact reference fetch to `/api/pulse/incidents/{id...}` (warn on graph_node mismatch). Empty/error Pulse states are independent of the graph demo banner; when the graph is demo/last-known, Pulse join is **disabled** (no indicators on mock topology) and the panel shows an explicit disclaimer. Failed Pulse refresh keeps the last snapshot but surfaces an amber “may be stale” error.
+
+**Consequences:** Milestone C can deepen the incident panel without revisiting identity or health-separation. Playwright defaults empty Pulse so prior screenshot baselines stay stable; new `pulse-*.png` baselines document intentional overlays.
+
+**Alternatives considered:** Collapsing Pulse into StatusPill (rejected: stale≠healthy); fuzzy name matching (rejected: ADR-014); new route tree for incidents (deferred: query param is enough for B); WebSockets (rejected: snapshot API).
+
+---
+
 ## ADR-015: Deterministic Perch UI verification without redesign
 
 **Date:** 2026-10-10  

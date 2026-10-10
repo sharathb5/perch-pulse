@@ -1,0 +1,51 @@
+{
+  "schema_version": "pulse.api.incidents.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "data_sources": {
+    "observations": "process_memory_unavailable",
+    "incidents": "file_store",
+    "changes": "file_store"
+  },
+  "limitations": [],
+  "count": 2,
+  "limit": 50,
+  "incidents": [
+    {
+      "schema_version": "pulse.incident.v1",
+      "incident_id": "inc|fixture/production/api|20261010T115000.000000000Z",
+      "primary_service_id": "fixture/production/api",
+      "environment": "production",
+      "finding_ids": ["fixture/production/api|latency_ms|20261010T115000.000000000Z"],
+      "signal_types": ["latency_ms"],
+      "first_detected_at": "2026-10-10T11:50:00Z",
+      "last_observed_at": "2026-10-10T11:55:00Z",
+      "affected_service_ids": ["fixture/production/api"],
+      "before": { "phase": "before", "window": { "start": "2026-10-10T11:40:00Z", "end": "2026-10-10T11:50:00Z" }, "available": true },
+      "during": { "phase": "during", "window": { "start": "2026-10-10T11:50:00Z", "end": "2026-10-10T11:55:00Z" }, "available": true },
+      "after": { "phase": "after", "window": { "start": "2026-10-10T11:55:00Z", "end": "2026-10-10T12:00:00Z" }, "available": false, "limitation": "Still open; after window incomplete." },
+      "observations": ["Latency still elevated."],
+      "inferences": ["Ongoing regression (not proven causation)."],
+      "limitations": ["No live observation store in viz process."],
+      "summary": "fixture/production/api open degradation via latency_ms (snapshot; not proven causation)"
+    },
+    {
+      "schema_version": "pulse.incident.v1",
+      "incident_id": "inc|fixture/production/api|20261010T050000.000000000Z",
+      "primary_service_id": "fixture/production/api",
+      "environment": "production",
+      "finding_ids": ["fixture/production/api|latency_ms|20261010T050000.000000000Z"],
+      "signal_types": ["latency_ms", "call_rate"],
+      "first_detected_at": "2026-10-10T05:00:00Z",
+      "last_observed_at": "2026-10-10T05:10:00Z",
+      "recovered_at": "2026-10-10T05:10:00Z",
+      "affected_service_ids": ["fixture/production/api"],
+      "before": { "phase": "before", "window": { "start": "2026-10-10T04:50:00Z", "end": "2026-10-10T05:00:00Z" }, "available": true },
+      "during": { "phase": "during", "window": { "start": "2026-10-10T05:00:00Z", "end": "2026-10-10T05:10:00Z" }, "available": true },
+      "after": { "phase": "after", "window": { "start": "2026-10-10T05:10:00Z", "end": "2026-10-10T05:20:00Z" }, "available": true },
+      "observations": ["Latency elevated during window."],
+      "inferences": ["Possible regression on api (not proven causation)."],
+      "limitations": ["Persisted snapshot."],
+      "summary": "fixture/production/api degradation detected via latency_ms (evidence snapshot; not proven causation)"
+    }
+  ]
+}

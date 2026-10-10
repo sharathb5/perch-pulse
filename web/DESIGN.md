@@ -99,7 +99,7 @@ App (BrowserRouter)
           └── logs / credentials setup UI
 ```
 
-Supporting: `StatusPill`, `ProviderBadge`, hooks `usePerchData` / `useNodeLogs`, mappers in `lib/mappers.js`, AI handoff in `lib/aiHandoff.js`.
+Supporting: `StatusPill`, `ProviderBadge`, `PulseIndicator`, `PulseSection`, hooks `usePerchData` / `useNodeLogs` / `usePulseData` / `usePulseIncident`, mappers in `lib/mappers.js`, Pulse adapters in `lib/pulse.js`, AI handoff in `lib/aiHandoff.js`.
 
 ---
 
@@ -159,7 +159,9 @@ Navbar brand is static text “perch”; stack title comes from graph `appName` 
 
 **Invariant reminder:** unknown/missing must not look like healthy. Dot for unknown is slate, not green.
 
-Active probe health (`/api/status`) is separate from Pulse intelligence (`/api/pulse/*`). As of this survey the React UI does **not** yet consume Pulse endpoints (Milestone B+).
+Active probe health (`/api/status`) is separate from Pulse intelligence (`/api/pulse/*`).
+
+**Pulse overlay (Milestone B):** `PulseIndicator` on `ServiceCard` and `PulseSection` in the detail panel consume `/api/pulse/services` (+ incidents when needed). Join is via backend `graph_node` only. Kinds: `open` / `historical` / `stale` / `unavailable` / `unknown`. Recovered incidents use a historical (slate) indicator — never force probe `StatusPill` red/green. `process_memory_unavailable` is shown as unavailable/unknown, never healthy. Incident deep-link: `?incident=<url-encoded-id>` on the existing `/stack/:stackName/:nodeId` route.
 
 ---
 
@@ -170,6 +172,7 @@ Active probe health (`/api/status`) is separate from Pulse intelligence (`/api/p
 - Header: label, provider · environment, close.
 - Summary grid: region / status / branch (often “—” for live custom nodes).
 - Extra meta: project, service, error rate, daily $, recent errors.
+- Pulse section: intelligence availability, incident counts, freshness, signals, summary, incident reference (Milestone B — not full investigation).
 - Tabs: `deployments` | `logs`.
 - Custom providers: copyable status/logs shell commands instead of provider log fetch.
 - Missing node id: “No node exists for this id in the stack graph.”
@@ -218,7 +221,7 @@ Documented, **not fixed** in the verification-prep milestone:
 5. Provider-specific card tabs differ from detail panel tabs (`deployments`/`logs` only).
 6. Animated edges + fitView can cause minor screenshot variance (E2E disables motion where possible).
 7. Vite template README / default assets (`hero.png`, vite/react SVGs) remain in the package but are unused by the viz SPA.
-8. No Pulse intelligence UI yet (API exists server-side only).
+8. Pulse Milestone B adds indicators + compact detail section only; full incident investigation is Milestone C.
 
 ---
 

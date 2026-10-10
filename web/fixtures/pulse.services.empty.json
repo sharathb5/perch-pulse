@@ -1,0 +1,17 @@
+{
+  "schema_version": "pulse.api.services.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "data_sources": {
+    "observations": "process_memory_unavailable",
+    "incidents": "file_store",
+    "changes": "file_store"
+  },
+  "limitations": [
+    "Pulse intelligence is distinct from active health probes (GET /api/status).",
+    "This endpoint returns a snapshot; it is not a continuous live stream.",
+    "Observation history is process-local and unavailable in this viz process; intelligence uses persisted incidents when present and never treats missing data as healthy."
+  ],
+  "count": 0,
+  "limit": 200,
+  "services": []
+}

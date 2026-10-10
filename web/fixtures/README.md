@@ -1,6 +1,14 @@
 # Deterministic viz fixtures
 
-JSON payloads shaped like `perch graph --json` / `perch status --json` for Vitest and Playwright.
+JSON payloads shaped like live viz APIs for Vitest and Playwright.
 
-- No live network, Astronomy Shop, Databricks, or credentials.
-- Used by `web/e2e/*` via Playwright route mocking and by `web/src/lib/mappers.test.js`.
+| File | API shape |
+|------|-----------|
+| `graph.*.json` / `status.*.json` | `/api/graph`, `/api/status` |
+| `pulse.services.*.json` | `/api/pulse/services` |
+| `pulse.incidents.*.json` / `pulse.incident.detail.json` | `/api/pulse/incidents` |
+
+- No live network, Astronomy Shop Docker, Databricks, or credentials.
+- Pulse fixtures use explicit `graph_node` joins (`api` / `web` / `db`) — not display-name heuristics.
+- `process_memory_unavailable` fixtures must never be presented as live telemetry.
+- Used by `web/e2e/*` via Playwright route mocking and by `web/src/**/*.test.js`.
