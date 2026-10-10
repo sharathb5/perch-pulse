@@ -1,0 +1,48 @@
+{
+  "appName": "fixture-stack",
+  "environment": "production",
+  "providers": ["github", "vercel", "render", "supabase"],
+  "nodes": [
+    {
+      "name": "github",
+      "provider": "github",
+      "deployable": false,
+      "configured": true,
+      "project": "org/fixture-app",
+      "credentialsKey": ""
+    },
+    {
+      "name": "web",
+      "provider": "vercel",
+      "deployable": true,
+      "configured": true,
+      "project": "fixture-app",
+      "service": "web",
+      "credentialsKey": "vercel_token",
+      "credentialsDashboardUrl": "https://vercel.com/account/tokens"
+    },
+    {
+      "name": "api",
+      "provider": "render",
+      "deployable": true,
+      "configured": true,
+      "project": "fixture-api",
+      "service": "api",
+      "credentialsKey": "render_api_key"
+    },
+    {
+      "name": "db",
+      "provider": "supabase",
+      "deployable": false,
+      "configured": true,
+      "project": "fixture-db",
+      "credentialsKey": "supabase_access_token"
+    }
+  ],
+  "edges": [
+    { "from": "github", "to": "web" },
+    { "from": "github", "to": "api" },
+    { "from": "web", "to": "db" },
+    { "from": "api", "to": "db" }
+  ]
+}

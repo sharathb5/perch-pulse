@@ -112,7 +112,7 @@ export function PerchGraph({ selectedNodeId, nodes: nodesProp, edges: edgesProp,
   )
 
   return (
-    <div className="h-full w-full bg-white">
+    <div data-testid="perch-graph" className="h-full w-full bg-white">
       <ReactFlow
         nodes={nodes}
         edges={edges}

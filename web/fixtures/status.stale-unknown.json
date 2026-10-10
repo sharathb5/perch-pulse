@@ -1,0 +1,13 @@
+{
+  "env": "production",
+  "nodes": [
+    {
+      "name": "web",
+      "provider": "vercel",
+      "healthy": true,
+      "status_source": "probe",
+      "configured": true,
+      "error_rate": 0
+    }
+  ]
+}

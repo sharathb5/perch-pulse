@@ -1,0 +1,38 @@
+{
+  "env": "production",
+  "nodes": [
+    {
+      "name": "github",
+      "provider": "github",
+      "healthy": true,
+      "status_source": "probe",
+      "configured": true
+    },
+    {
+      "name": "web",
+      "provider": "vercel",
+      "healthy": true,
+      "status_source": "probe",
+      "configured": true,
+      "error_rate": 0,
+      "last_deploy": { "sha": "abc1234deadbeef", "ago": "1h ago" }
+    },
+    {
+      "name": "api",
+      "provider": "render",
+      "healthy": true,
+      "status_source": "probe",
+      "configured": true,
+      "error_rate": 0.05,
+      "recent_errors": ["upstream timeout"]
+    },
+    {
+      "name": "db",
+      "provider": "supabase",
+      "healthy": false,
+      "status_source": "probe",
+      "configured": true,
+      "detail": "connection refused"
+    }
+  ]
+}

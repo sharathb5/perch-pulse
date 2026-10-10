@@ -28,6 +28,21 @@ Rules:
 
 ---
 
+## ADR-015: Deterministic Perch UI verification without redesign
+
+**Date:** 2026-10-10  
+**Status:** Accepted
+
+**Context:** Before Milestones B–D of #17, agents need a safe way to change `web/` without redesigning Perch or depending on live Astronomy Shop / Docker / credentials. The SPA already seeds mock topology on API failure; that behavior must stay documented and testable.
+
+**Decision:** Keep the existing React + Vite + `@xyflow/react` + Tailwind UI as the visual source of truth (`web/DESIGN.md`). Add project Cursor skills (`.cursor/skills/perch-ui-*`), Vitest contract tests + fixture JSON under `web/fixtures/`, and Chromium-only Playwright E2E with committed screenshot baselines (`web/e2e/__screenshots__/`). Playwright runs in a **separate** GitHub Actions job (`web-ui.yml`), not inside `make verify`, so browser download cost does not slow the Go gate. CI never passes `--update-snapshots`. Mock fallback remains; tests assert honesty rather than rewriting it in this prep milestone.
+
+**Consequences:** Milestone B+ PRs can prove regressions via fixtures and pixel baselines. Agents must explain intentional visual deltas. Disk cost is ~Chromium install only; hard-stop guidance lives in `web/UI_VERIFICATION.md`.
+
+**Alternatives considered:** Embedding Playwright in `make verify` (rejected: slows every Go change); Dockerized browsers (rejected: disk risk); rewriting away mock seed now (deferred: honesty tests first); third-party visual SaaS (rejected: skills must work offline).
+
+---
+
 ## ADR-014: Read-only Pulse HTTP API on existing `perch viz` server
 
 **Date:** 2026-10-10  

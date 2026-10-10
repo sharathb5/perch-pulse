@@ -9,10 +9,18 @@ const envOptions = [
 /** @param {{ stackName: string, environment: string, onEnvironmentChange: (v: string) => void, onRefresh?: () => void }} props */
 export function Navbar({ stackName, environment, onEnvironmentChange, onRefresh }) {
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
+    <header
+      data-testid="perch-navbar"
+      className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4"
+    >
       <div className="text-sm font-bold text-black">perch</div>
 
-      <div className="rounded-full border border-gray-200 bg-gray-100 px-3 py-1 text-sm text-black">{stackName}</div>
+      <div
+        data-testid="stack-name"
+        className="rounded-full border border-gray-200 bg-gray-100 px-3 py-1 text-sm text-black"
+      >
+        {stackName}
+      </div>
 
       <div className="flex items-center gap-2">
         <label htmlFor="env-select" className="sr-only">

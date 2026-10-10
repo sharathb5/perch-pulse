@@ -48,7 +48,7 @@ export function ServiceCard({ data, selected }) {
   }
 
   return (
-    <div className="relative w-[210px] max-w-[210px]">
+    <div data-testid={`service-node-${id}`} className="relative w-[210px] max-w-[210px]">
       <Handle type="target" position={Position.Left} className="h-2 w-2 border-0 bg-transparent opacity-0" />
       <Handle type="source" position={Position.Right} className="h-2 w-2 border-0 bg-transparent opacity-0" />
 
