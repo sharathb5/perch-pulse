@@ -223,7 +223,7 @@ Controlled, reversible faults (and one negative control) are applied via the dem
 
 | Scenario ID | Failure mode | Flag | Active variant |
 |-------------|--------------|------|----------------|
-| `latency-shipping-intl` | latency | `intlShippingSlowdown` | `5sec` |
+| `latency-shipping-intl` | latency | `intlShippingSlowdown` | `10sec` |
 | `error-payment` | error rate | `paymentFailure` | `50%` |
 | `outage-payment` | dependency outage | `paymentUnreachable` | `on` |
 | `control-emit-raw-pii` | neutral (control) | `emitRawPii` | `on` |
@@ -237,14 +237,26 @@ Controlled, reversible faults (and one negative control) are applied via the dem
 
 See [`examples/astronomy-shop/scenarios/README.md`](../examples/astronomy-shop/scenarios/README.md) and ADR-010.
 
+## Baseline detector evaluation
+
+Telemetry-only detection (Prometheus spanmetrics p99 latency + error/call rates → rolling median baseline) with evaluation against scenario ground truth **after** each run:
+
+```bash
+./examples/astronomy-shop/eval/run-detector-eval.sh
+```
+
+See [`examples/astronomy-shop/eval/README.md`](../examples/astronomy-shop/eval/README.md) and ADR-012. Packages: `internal/pulse/telem`, `internal/pulse/detect` (no scenario import), `internal/pulse/evaluate`.
+
 ## CI vs live verification
 
 | Check | Where |
 |-------|--------|
 | Mapping schema, uniqueness, required services, observation compatibility | `go test ./internal/pulse/astronomy/...` (part of `make verify`) |
 | Scenario schema, lifecycle, label separation, secrets | `go test ./internal/pulse/scenario/...` (part of `make verify`) |
+| Detector baseline/findings/attribution + evaluator metrics | `go test ./internal/pulse/detect/... ./internal/pulse/evaluate/...` (part of `make verify`) |
 | Clone + `make start-minimal` + frontend/Jaeger | `./examples/astronomy-shop/scripts/verify-live.sh` (**not** in CI; Docker-heavy) |
 | Start/stop each catalog scenario + recovery | `./examples/astronomy-shop/scenarios/verify-scenarios.sh` (**not** in CI) |
+| Full detector eval vs ground truth | `./examples/astronomy-shop/eval/run-detector-eval.sh` (**not** in CI) |
 
 If live verify cannot run (Docker down, insufficient disk/RAM), the script exits non-zero with a clear reason. That does not fail `make verify`.
 
@@ -254,7 +266,7 @@ Reused the already-running minimal stack (no rebuild). `./examples/astronomy-sho
 
 | Scenario | Activation | Recovery | Notes |
 |----------|------------|----------|-------|
-| `latency-shipping-intl` | PASS (`intlShippingSlowdown=5sec`) | PASS → `off` | frontend + load-generator stayed up; Jaeger API reachable |
+| `latency-shipping-intl` | PASS via flagd (`intlShippingSlowdown=10sec`) | PASS → `off` | detector uses Prom p99 latency |
 | `error-payment` | PASS (`paymentFailure=50%`) | PASS → `off` | same |
 | `outage-payment` | PASS (`paymentUnreachable=on`) | PASS → `off` | same |
 | `control-emit-raw-pii` | PASS (`emitRawPii=on`) | PASS → `off` | negative control; labeled change, not a fault |

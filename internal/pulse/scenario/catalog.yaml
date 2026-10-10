@@ -14,22 +14,24 @@ scenarios:
     classification: fault
     target_otel: shipping
     description: >
-      Inject a 5s delay on international shipping responses via the
-      intlShippingSlowdown feature flag (OpenTelemetry Demo flagd).
+      Inject a 10s delay on international shipping responses via
+      intlShippingSlowdown (OpenTelemetry Demo flagd).
     mechanism:
       kind: flagd
       flag: intlShippingSlowdown
-      active_variant: "5sec"
+      active_variant: "10sec"
       idle_variant: "off"
     expected_affected_otel:
       - shipping
+      - quote
       - frontend
     expected_dependency_path_otel:
       - frontend
       - shipping
+      - quote
     operator_notes: >
-      Latency injection is flag-driven and reversible. Load-generator traffic
-      should continue; expect elevated shipping latency in traces/metrics.
+      Uses the stronger 10sec variant so sparse international shipping paths
+      still move spanmetrics latency enough for demo detection.
 
   - id: error-payment
     type: error_rate
