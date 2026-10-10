@@ -1,0 +1,35 @@
+{
+  "schema_version": "pulse.api.incident.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "data_sources": {
+    "observations": "process_memory_unavailable",
+    "incidents": "file_store",
+    "changes": "file_store",
+    "correlation": "on_read"
+  },
+  "limitations": [],
+  "incident": {
+    "schema_version": "pulse.incident.v1",
+    "incident_id": "inc|fixture/production/api|20261010T050000.000000000Z",
+    "primary_service_id": "fixture/production/api",
+    "environment": "production",
+    "finding_ids": ["fixture/production/api|latency_ms|20261010T050000.000000000Z"],
+    "signal_types": ["latency_ms", "call_rate"],
+    "first_detected_at": "2026-10-10T05:00:00Z",
+    "last_observed_at": "2026-10-10T05:10:00Z",
+    "recovered_at": "2026-10-10T05:10:00Z",
+    "affected_service_ids": ["fixture/production/api"],
+    "before": { "phase": "before", "window": { "start": "2026-10-10T04:50:00Z", "end": "2026-10-10T05:00:00Z" }, "available": true },
+    "during": { "phase": "during", "window": { "start": "2026-10-10T05:00:00Z", "end": "2026-10-10T05:10:00Z" }, "available": true },
+    "after": { "phase": "after", "window": { "start": "2026-10-10T05:10:00Z", "end": "2026-10-10T05:20:00Z" }, "available": true },
+    "observations": ["Latency elevated during window."],
+    "inferences": ["Possible regression on api (not proven causation)."],
+    "limitations": ["Persisted snapshot; observations unavailable in viz process."],
+    "summary": "fixture/production/api degradation detected via latency_ms (evidence snapshot; not proven causation)"
+  },
+  "correlation": {
+    "schema_version": "pulse.correlation.v1",
+    "note": "Correlation is not causation."
+  },
+  "graph_node": "api"
+}

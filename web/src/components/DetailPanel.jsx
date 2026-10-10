@@ -5,6 +5,7 @@ import { useNodeLogs } from '../hooks/useNodeLogs.js'
 import { buildErrorPrompt, isErroredNode, openInAIWithFallback } from '../lib/aiHandoff.js'
 import { credentialKeyForNode } from '../lib/mappers.js'
 import { DeployRow } from './DeployRow.jsx'
+import { PulseSection } from './PulseSection.jsx'
 
 function providerTitle(provider) {
   const map = {
@@ -446,8 +447,28 @@ function ProviderLogsAIActions({ node, environment, logsResult }) {
   )
 }
 
-/** @param {{ node: object | null, environment: string }} props */
-export function DetailPanel({ node, environment }) {
+/**
+ * @param {{
+ *   node: object | null,
+ *   environment: string,
+ *   pulse?: object | null,
+ *   pulseDataSources?: object | null,
+ *   pulseError?: string | null,
+ *   pulseStaleSnapshot?: boolean,
+ *   pulseLastSuccessAt?: string | null,
+ *   graphDemo?: boolean,
+ * }} props
+ */
+export function DetailPanel({
+  node,
+  environment,
+  pulse = null,
+  pulseDataSources = null,
+  pulseError = null,
+  pulseStaleSnapshot = false,
+  pulseLastSuccessAt = null,
+  graphDemo = false,
+}) {
   const { stackName, nodeId } = useParams()
   const navigate = useNavigate()
   const [tab, setTab] = useState('deployments')
@@ -612,6 +633,17 @@ export function DetailPanel({ node, environment }) {
         <div className="border-b border-gray-200 px-3 py-3 text-sm text-gray-500">
           No node exists for this id in the stack graph.
         </div>
+      )}
+
+      {node && (
+        <PulseSection
+          pulse={pulse}
+          dataSources={pulseDataSources}
+          pulseError={pulseError}
+          staleSnapshot={pulseStaleSnapshot}
+          lastSuccessAt={pulseLastSuccessAt}
+          graphDemo={graphDemo}
+        />
       )}
 
       {node && (

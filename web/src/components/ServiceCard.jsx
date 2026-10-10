@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { buildErrorPrompt, isErroredNode, openInAIWithFallback } from '../lib/aiHandoff.js'
 import { ProviderBadge } from './ProviderBadge.jsx'
+import { PulseIndicator } from './PulseIndicator.jsx'
 import { StatusPill } from './StatusPill.jsx'
 
 function providerLabel(provider) {
@@ -76,6 +77,7 @@ export function ServiceCard({ data, selected }) {
           <div className="mt-0.5 min-w-0 truncate font-mono text-[11px] text-gray-400" title={data.url}>
             {data.url}
           </div>
+          <PulseIndicator pulse={data.pulse} />
         </button>
 
         <button type="button" onClick={go} className="w-full max-w-full border-t border-gray-200 px-2.5 py-2 text-left">

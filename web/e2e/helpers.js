@@ -14,17 +14,44 @@ export const fixtures = {
   statusOk: loadFixture('status.ok.json'),
   graphEmpty: loadFixture('graph.empty.json'),
   statusEmpty: loadFixture('status.empty.json'),
+  pulseServicesEmpty: loadFixture('pulse.services.empty.json'),
+  pulseServicesHistorical: loadFixture('pulse.services.historical.json'),
+  pulseServicesOpen: loadFixture('pulse.services.open.json'),
+  pulseServicesUnavailable: loadFixture('pulse.services.unavailable.json'),
+  pulseIncidentsHistorical: loadFixture('pulse.incidents.historical.json'),
+  pulseIncidentsOpen: loadFixture('pulse.incidents.open.json'),
+  pulseIncidentDetail: loadFixture('pulse.incident.detail.json'),
 }
 
 /**
  * @param {import('@playwright/test').Page} page
- * @param {{ graph?: object, status?: object, graphStatus?: number, statusStatus?: number }} opts
+ * @param {{
+ *   graph?: object,
+ *   status?: object,
+ *   graphStatus?: number,
+ *   statusStatus?: number,
+ *   pulseServices?: object,
+ *   pulseIncidents?: object,
+ *   pulseIncidentDetail?: object,
+ *   pulseStatus?: number,
+ * }} opts
  */
 export async function mockApis(page, opts = {}) {
   const graph = opts.graph ?? fixtures.graphOk
   const status = opts.status ?? fixtures.statusOk
   const graphStatus = opts.graphStatus ?? 200
   const statusStatus = opts.statusStatus ?? 200
+  // Default empty Pulse success keeps existing screenshot baselines stable (no indicators).
+  const pulseServices = opts.pulseServices ?? fixtures.pulseServicesEmpty
+  const pulseIncidentsResolved =
+    opts.pulseIncidents ??
+    (opts.pulseServices === fixtures.pulseServicesHistorical
+      ? fixtures.pulseIncidentsHistorical
+      : opts.pulseServices === fixtures.pulseServicesOpen
+        ? fixtures.pulseIncidentsOpen
+        : loadEmptyIncidents())
+  const pulseDetail = opts.pulseIncidentDetail ?? fixtures.pulseIncidentDetail
+  const pulseStatus = opts.pulseStatus ?? 200
 
   await page.route('**/api/graph**', async (route) => {
     if (graphStatus >= 400) {
@@ -58,6 +85,49 @@ export async function mockApis(page, opts = {}) {
     })
   })
 
+  await page.route('**/api/pulse/services**', async (route) => {
+    if (pulseStatus >= 400) {
+      await route.fulfill({
+        status: pulseStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'pulse.api.error.v1',
+          error: 'pulse services unavailable',
+          code: 'unavailable',
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(pulseServices),
+    })
+  })
+
+  await page.route('**/api/pulse/incidents**', async (route) => {
+    if (pulseStatus >= 400) {
+      await route.fulfill({
+        status: pulseStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'pulse.api.error.v1',
+          error: 'pulse incidents unavailable',
+          code: 'unavailable',
+        }),
+      })
+      return
+    }
+    const path = new URL(route.request().url()).pathname
+    // Detail: /api/pulse/incidents/{id...} — list is exactly /api/pulse/incidents
+    const isDetail = /\/api\/pulse\/incidents\/.+/.test(path)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(isDetail ? pulseDetail : pulseIncidentsResolved),
+    })
+  })
+
   await page.route('**/api/logs**', async (route) => {
     await route.fulfill({
       status: 200,
@@ -68,6 +138,21 @@ export async function mockApis(page, opts = {}) {
   await page.route('**/api/credentials**', async (route) => {
     await route.fulfill({ status: 405, body: 'method not allowed in e2e' })
   })
+}
+
+function loadEmptyIncidents() {
+  return {
+    schema_version: 'pulse.api.incidents.v1',
+    generated_at: '2026-10-10T12:00:00Z',
+    data_sources: {
+      observations: 'process_memory_unavailable',
+      incidents: 'file_store',
+      changes: 'file_store',
+    },
+    count: 0,
+    limit: 50,
+    incidents: [],
+  }
 }
 
 /** Stabilize rendering before screenshots. */
@@ -104,6 +189,11 @@ export async function expectGraphReady(page) {
 export function screenshotOpts(page) {
   return {
     fullPage: true,
-    mask: [page.locator('.react-flow__minimap'), page.locator('.react-flow__controls')],
+    mask: [
+      page.locator('.react-flow__minimap'),
+      page.locator('.react-flow__controls'),
+      // Belt-and-suspenders if a wall-clock stamp ever leaks into the panel.
+      page.getByTestId('pulse-refreshed-at'),
+    ],
   }
 }

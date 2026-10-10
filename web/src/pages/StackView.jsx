@@ -1,12 +1,14 @@
 import { ReactFlowProvider } from '@xyflow/react'
 import { X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { DetailPanel } from '../components/DetailPanel.jsx'
 import { Navbar } from '../components/Navbar.jsx'
 import { mockNodes } from '../data/mock.js'
 import { PerchGraph } from '../graph/PerchGraph.jsx'
 import { usePerchData } from '../hooks/usePerchData.js'
+import { usePulseData } from '../hooks/usePulseData.js'
+import { enrichServicePulse } from '../lib/pulse.js'
 
 export function StackView() {
   const { stackName, nodeId } = useParams()
@@ -14,16 +16,66 @@ export function StackView() {
   /** When set, banner stays hidden until `error` changes to a different message. */
   const [dismissedError, setDismissedError] = useState(null)
 
-  const { nodes: flowNodes, edges: flowEdges, appName, error, refetch } = usePerchData(environment)
+  const { nodes: flowNodes, edges: flowEdges, appName, error, refetch: refetchGraph } = usePerchData(environment)
+  const {
+    getForNode,
+    dataSources: pulseDataSources,
+    error: pulseError,
+    staleSnapshot: pulseStaleSnapshot,
+    generatedAt: pulseGeneratedAt,
+    lastSuccessAt: pulseLastSuccessAt,
+    refetch: refetchPulse,
+  } = usePulseData()
   const stackTitle = (appName && appName.trim() !== '' ? appName : stackName) ?? ''
+  const graphDemo = error != null && error !== ''
+
+  const nodesWithPulse = useMemo(() => {
+    // Never join Pulse onto demo/last-known mock topology — IDs may collide with real graph_node values.
+    if (graphDemo) {
+      return flowNodes
+    }
+    return flowNodes.map((n) => {
+      const pulse = getForNode(n.id)
+      if (!pulse) {
+        return n
+      }
+      const enriched = enrichServicePulse(pulse, pulse.relatedIncidents ?? [], {
+        expectedEnvironment: environment,
+      })
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          // Probe status from /api/status must remain the StatusPill source.
+          status: n.data.status,
+          pulse: enriched,
+        },
+      }
+    })
+  }, [flowNodes, getForNode, environment, graphDemo])
 
   const node = useMemo(() => {
-    const fromFlow = flowNodes.find((n) => n.id === nodeId)?.data
+    const fromFlow = nodesWithPulse.find((n) => n.id === nodeId)?.data
     if (fromFlow) {
       return fromFlow
     }
     return mockNodes.find((n) => n.id === nodeId) ?? null
-  }, [flowNodes, nodeId])
+  }, [nodesWithPulse, nodeId])
+
+  const selectedPulse = !graphDemo && nodeId ? getForNode(nodeId) : null
+  const selectedPulseEnriched = useMemo(() => {
+    if (!selectedPulse) {
+      return null
+    }
+    return enrichServicePulse(selectedPulse, selectedPulse.relatedIncidents ?? [], {
+      expectedEnvironment: environment,
+    })
+  }, [selectedPulse, environment])
+
+  const refetch = useCallback(() => {
+    void refetchGraph()
+    void refetchPulse()
+  }, [refetchGraph, refetchPulse])
 
   const showBanner = error != null && error !== '' && error !== dismissedError
 
@@ -57,7 +109,7 @@ export function StackView() {
           <div className="min-h-0 min-w-0 flex-1">
             <PerchGraph
               selectedNodeId={nodeId}
-              nodes={flowNodes}
+              nodes={nodesWithPulse}
               edges={flowEdges}
               layoutResetKey={environment}
             />
@@ -65,7 +117,16 @@ export function StackView() {
         </ReactFlowProvider>
 
         {nodeId != null && nodeId !== '' && (
-          <DetailPanel node={node} environment={environment} />
+          <DetailPanel
+            node={node}
+            environment={environment}
+            pulse={selectedPulseEnriched}
+            pulseDataSources={pulseDataSources}
+            pulseError={pulseError}
+            pulseStaleSnapshot={pulseStaleSnapshot}
+            pulseLastSuccessAt={pulseGeneratedAt ?? pulseLastSuccessAt}
+            graphDemo={graphDemo}
+          />
         )}
       </div>
     </div>

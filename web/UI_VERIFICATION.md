@@ -52,8 +52,9 @@ Fixtures live in `web/fixtures/`:
 | `graph.ok.json` / `status.ok.json` | Happy-path topology |
 | `graph.empty.json` / `status.empty.json` | Empty graph |
 | `status.stale-unknown.json` | Nodes without matching health → `unknown` |
+| `pulse.services.*.json` / `pulse.incidents.*.json` | Pulse intelligence overlays (Milestone B) |
 
-E2E tests intercept `/api/graph` and `/api/status` (and optionally fail them). They never call Astronomy Shop, Databricks, or production credentials.
+E2E tests intercept `/api/graph`, `/api/status`, and `/api/pulse/*` (and optionally fail them). Default Pulse mock is empty so legacy screenshot baselines stay stable. They never call Astronomy Shop, Databricks, or production credentials.
 
 ---
 
@@ -62,10 +63,14 @@ E2E tests intercept `/api/graph` and `/api/status` (and optionally fail them). T
 | Baseline | Viewport | What it covers |
 |----------|----------|----------------|
 | `main-graph` | 1280×720 | Graph with fixture nodes/edges |
-| `selected-node` | 1280×720 | Node selected + detail panel |
+| `selected-node` | 1280×720 | Node selected + detail panel (+ empty Pulse section) |
 | `api-error` | 1280×720 | Amber error banner (mock retained) |
 | `empty-graph` | 1280×720 | Successful empty API response |
 | `main-graph-narrow` | 390×844 | Narrow viewport sanity |
+| `pulse-graph-historical` | 1280×720 | Pulse historical indicators on nodes |
+| `pulse-selected-historical` | 1280×720 | Detail Pulse section for recovered incidents |
+| `pulse-unavailable` | 1280×720 | Unavailable Pulse intelligence |
+| `pulse-api-error` | 1280×720 | Pulse API failure (graph intact) |
 
 ### Regenerating baselines
 

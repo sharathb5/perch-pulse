@@ -1,0 +1,34 @@
+{
+  "schema_version": "pulse.api.services.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "data_sources": {
+    "observations": "process_memory_unavailable",
+    "incidents": "file_store",
+    "changes": "file_store"
+  },
+  "limitations": [
+    "Pulse intelligence is distinct from active health probes (GET /api/status).",
+    "This endpoint returns a snapshot; it is not a continuous live stream.",
+    "Observation history is process-local and unavailable in this viz process; intelligence uses persisted incidents when present and never treats missing data as healthy."
+  ],
+  "count": 1,
+  "limit": 200,
+  "services": [
+    {
+      "schema_version": "pulse.api.service_status.v1",
+      "service_id": "fixture/production/db",
+      "graph_node": "db",
+      "mapping_source": "fixture_explicit",
+      "intelligence": "",
+      "intelligence_available": false,
+      "freshness": "unavailable",
+      "open_incident_ids": [],
+      "related_incident_ids": [],
+      "limitations": [
+        "No process-local observation store is wired; cannot report fresh telemetry intelligence.",
+        "Missing Pulse intelligence must not be interpreted as healthy."
+      ],
+      "active_health_note": "Active reachability/latency probes remain on GET /api/status and are not represented here."
+    }
+  ]
+}

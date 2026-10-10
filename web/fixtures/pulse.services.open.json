@@ -1,0 +1,43 @@
+{
+  "schema_version": "pulse.api.services.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "data_sources": {
+    "observations": "process_memory_unavailable",
+    "incidents": "file_store",
+    "changes": "file_store"
+  },
+  "limitations": [
+    "Pulse intelligence is distinct from active health probes (GET /api/status).",
+    "This endpoint returns a snapshot; it is not a continuous live stream.",
+    "Observation history is process-local and unavailable in this viz process; intelligence uses persisted incidents when present and never treats missing data as healthy."
+  ],
+  "count": 1,
+  "limit": 200,
+  "services": [
+    {
+      "schema_version": "pulse.api.service_status.v1",
+      "service_id": "fixture/production/api",
+      "graph_node": "api",
+      "mapping_source": "fixture_explicit",
+      "intelligence": "degraded",
+      "intelligence_available": true,
+      "observation_source": "persisted_incident",
+      "last_observed_at": "2026-10-10T11:55:00Z",
+      "freshness": "stale",
+      "age_seconds": 300,
+      "open_incident_ids": [
+        "inc|fixture/production/api|20261010T115000.000000000Z"
+      ],
+      "related_incident_ids": [
+        "inc|fixture/production/api|20261010T115000.000000000Z",
+        "inc|fixture/production/api|20261010T050000.000000000Z"
+      ],
+      "limitations": [
+        "No process-local observation store is wired; cannot report fresh telemetry intelligence.",
+        "Open-incident evidence is older than the freshness window; treated as stale, not healthy.",
+        "Intelligence derived from open persisted incidents (snapshot), not a live probe."
+      ],
+      "active_health_note": "Active reachability/latency probes remain on GET /api/status and are not represented here."
+    }
+  ]
+}
