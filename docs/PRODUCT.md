@@ -27,7 +27,7 @@ These capabilities ship in the current repository:
 - **Logs resolution** (`perch logs`, `internal/stacklogs`) with ordered credential strategies and setup hints.
 - **Graph / topology** (`perch graph`, `internal/graph`) for environment-scoped dependency views.
 - **Agent-oriented context** (`perch context`, `--json`, `--for-agent`) from current collectors.
-- **Embedded React graph UI** (`perch viz` on localhost: `/api/graph`, `/api/status`, `/api/logs`, `/api/credentials`).
+- **Embedded React graph UI** (`perch viz` on localhost: `/api/graph`, `/api/status`, `/api/logs`, `/api/credentials`, plus read-only `/api/pulse/*` for persisted Pulse intelligence — see [`pulse-api.md`](pulse-api.md)).
 - **Local credentials** in `~/.perch` plus optional project `.env` sync—no Perch cloud service.
 
 Point-in-time probes and log fetches are the source of truth today. There is **no** warehouse-backed history, deploy-impact engine, or Pulse investigation API in-tree yet.
