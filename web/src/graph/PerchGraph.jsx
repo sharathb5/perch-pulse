@@ -9,7 +9,8 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { decodeIncidentId, normalizePulseTab, pulseStackPath } from '../lib/pulse.js'
 import { ServiceCard } from '../components/ServiceCard.jsx'
 import { mockEdges, mockNodes } from '../data/mock.js'
 import { getLayoutedElements, NODE_HEIGHT, NODE_WIDTH, separateOverlappingNodes } from './layout.js'
@@ -57,6 +58,7 @@ function FitViewOnReady({ nodeCount }) {
 export function PerchGraph({ selectedNodeId, nodes: nodesProp, edges: edgesProp, layoutResetKey = 'default' }) {
   const { stackName } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const defaultFlow = useMemo(() => buildFlowElements(), [])
   const baseNodes = nodesProp ?? defaultFlow.nodes
   const baseEdges = edgesProp ?? defaultFlow.edges
@@ -106,9 +108,16 @@ export function PerchGraph({ selectedNodeId, nodes: nodesProp, edges: edgesProp,
 
   const onNodeClick = useCallback(
     (_, node) => {
-      navigate(`/stack/${stackName}/${node.id}`)
+      // Preserve Pulse sidebar URL state when selecting a graph node (ADR-017).
+      navigate(
+        pulseStackPath(stackName, {
+          nodeId: node.id,
+          pulseTab: normalizePulseTab(searchParams.get('pulse')),
+          incidentId: decodeIncidentId(searchParams.get('incident')) || null,
+        }),
+      )
     },
-    [navigate, stackName],
+    [navigate, stackName, searchParams],
   )
 
   return (

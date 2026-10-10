@@ -28,6 +28,22 @@ Rules:
 
 ---
 
+## ADR-017: Pulse sidebar beside DetailPanel (Milestone C)
+
+**Date:** 2026-10-10  
+**Status:** Accepted  
+**Issue:** #24 (parent #17)
+
+**Context:** Milestone C needs overview / incident investigation / change correlation without replacing the React Flow graph or redesigning Perch. DetailPanel already uses a fixed 300px right rail; a full investigation UI does not fit there honestly.
+
+**Decision:** Add a dedicated collapsible `PulseSidebar` (360px) opened via a small Navbar “Pulse” control and via graph incident links. URL state: `?pulse=overview|incidents|changes` and existing `?incident=<encodeURIComponent(id)>`. **Panel coordination:** DetailPanel and PulseSidebar may both be open (graph | detail | pulse). Closing Pulse preserves `nodeId`. Escape clears incident → closes Pulse → then closes DetailPanel (StackView owns Escape; DetailPanel `escapeDisabled` when StackView is mounted). Reuse `usePulseData` / `usePulseIncident` / `lib/pulse.js`; extend list poll to `/api/pulse/changes`. No chart library; digest comparison tables only. No Run Pulse control. Simulated deploy markers labeled from contract fields (`metadata.simulated`, harness source, evidence refs).
+
+**Consequences:** Screenshot baselines gain `pulse-sidebar-*.png`. Playwright helpers mock `/api/pulse/changes`. Future Run Pulse (#25) and CI Reliability (#26) stay out of this PR.
+
+**Alternatives considered:** Replacing DetailPanel with Pulse (rejected: breaks original Perch); modal overlay (rejected: obscures graph); separate route tree (deferred: query params preserve B behavior).
+
+---
+
 ## ADR-016: Pulse intelligence overlay on existing graph (Milestone B)
 
 **Date:** 2026-10-10  

@@ -51,11 +51,23 @@ export function PulseSection({
     !(pulse?.relatedIncidentIds ?? []).includes(detail?.incident?.incidentId)
 
   const openIncident = (incidentId) => {
+    // Milestone C: open dedicated Pulse sidebar focused on this incident.
     navigate(pulseIncidentPath(stackName, nodeId, incidentId))
   }
 
   const clearIncident = () => {
     navigate(pulseIncidentPath(stackName, nodeId))
+  }
+
+  const openInSidebar = () => {
+    if (selectedIncidentId) {
+      openIncident(selectedIncidentId)
+      return
+    }
+    const first = pulse?.relatedIncidents?.[0]?.incidentId
+    if (first) {
+      openIncident(first)
+    }
   }
 
   return (
@@ -217,9 +229,17 @@ export function PulseSection({
               </p>
               {detail.correlation && (
                 <p className="text-[10px] text-gray-500">
-                  Correlation attached (not causation). Full investigation is Milestone C.
+                  Correlation attached (not causation).
                 </p>
               )}
+              <button
+                type="button"
+                data-testid="pulse-open-investigation"
+                onClick={openInSidebar}
+                className="mt-1 text-[10px] text-blue-600 hover:text-blue-800"
+              >
+                Open in Pulse sidebar
+              </button>
             </div>
           )}
         </div>
