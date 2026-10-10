@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Playwright (keep committed baselines under e2e/__screenshots__/)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

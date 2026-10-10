@@ -9,7 +9,11 @@ const styles = {
 export function StatusPill({ status }) {
   const s = styles[status] ?? styles.unknown
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+    <span
+      data-testid="status-pill"
+      data-status={s.label}
+      className="inline-flex items-center gap-1.5 text-xs text-gray-600"
+    >
       <span className={`h-2 w-2 rounded-full ${s.dot}`} />
       <span>{s.label}</span>
     </span>

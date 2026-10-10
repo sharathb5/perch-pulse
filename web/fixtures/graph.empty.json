@@ -1,0 +1,7 @@
+{
+  "appName": "empty-stack",
+  "environment": "production",
+  "providers": [],
+  "nodes": [],
+  "edges": []
+}

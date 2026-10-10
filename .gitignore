@@ -1,5 +1,10 @@
-# Cursor / local IDE (never commit)
-.cursor/
+# Cursor / local IDE (never commit), except shared project skills
+.cursor/*
+!.cursor/skills/
+.cursor/skills/*
+!.cursor/skills/*/
+!.cursor/skills/*/SKILL.md
+!.cursor/skills/**/*.md
 
 # Go toolchain & build outputs
 /bin/

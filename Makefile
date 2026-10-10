@@ -2,7 +2,7 @@
 # `make verify` is the single gate; individual targets support iteration.
 # Make stops on the first failing recipe (nonzero exit).
 
-.PHONY: build web-build web-deps web-build-embed web-lint web-test \
+.PHONY: build web-build web-deps web-build-embed web-lint web-test web-e2e \
 	go-fmt go-vet go-test provider-validate security \
 	verify test lint run
 
@@ -26,6 +26,11 @@ web-lint:
 
 web-test:
 	cd web && npm test
+
+# Deterministic Playwright checks (Chromium). Not part of `verify` — separate CI job.
+# Requires: npm ci, then `npx playwright install chromium` (check free disk first).
+web-e2e:
+	cd web && npm run test:e2e
 
 # Legacy convenience: npm install + embed build (prefer web-deps for CI/verify).
 web-build:

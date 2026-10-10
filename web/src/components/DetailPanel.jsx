@@ -517,7 +517,10 @@ export function DetailPanel({ node, environment }) {
   const recentList = node && Array.isArray(node.recentErrors) ? node.recentErrors.filter((s) => String(s).trim() !== '') : []
 
   return (
-    <aside className="flex h-full w-[300px] shrink-0 flex-col border-l border-gray-200 bg-white">
+    <aside
+      data-testid="detail-panel"
+      className="flex h-full w-[300px] shrink-0 flex-col border-l border-gray-200 bg-white"
+    >
       <div className="flex items-start justify-between gap-2 border-b border-gray-200 px-3 py-3">
         <div className="min-w-0">
           <div className="text-[13px] font-medium leading-tight text-black">

@@ -30,8 +30,11 @@ export function StackView() {
   return (
     <div className="flex h-screen flex-col bg-white">
       {showBanner && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
-          <span>Could not reach perch — showing last known data</span>
+        <div
+          data-testid="error-banner"
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
+        >
+          <span>Could not reach perch — showing last known or demo data</span>
           <button
             type="button"
             onClick={() => setDismissedError(error)}

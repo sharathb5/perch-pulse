@@ -52,9 +52,11 @@ Future Pulse modules must remain optional relative to core Perch collectors.
 
 ### Frontend (`web/`)
 
-- Stay aligned with viz APIs: `/api/graph`, `/api/status`, `/api/logs`, `/api/credentials`.
+- Stay aligned with viz APIs: `/api/graph`, `/api/status`, `/api/logs`, `/api/credentials`, `/api/pulse/*`.
 - Prefer existing hooks/mappers over parallel data paths.
 - Use `npm ci` for reproducible installs; do not commit `node_modules` or `dist`.
+- Preserve the existing UI: [`web/DESIGN.md`](web/DESIGN.md). Verification loop: [`web/UI_VERIFICATION.md`](web/UI_VERIFICATION.md). Skills: `.cursor/skills/perch-ui-implementation/`, `.cursor/skills/perch-ui-review/`.
+- Browser checks: `make web-e2e` (separate from `make verify`; Chromium + fixtures only).
 
 ### Providers
 

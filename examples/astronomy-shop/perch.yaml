@@ -19,6 +19,12 @@ environments:
       provider: custom
       status: "docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' checkout 2>/dev/null | grep -Eq '^(healthy|running)$'"
       logs: "docker logs --tail 100 checkout 2>&1 || true"
+    # email is a real OTEL Demo compose service (checkout depends_on email).
+    # The edge below was previously invalid because this node was missing.
+    email:
+      provider: custom
+      status: "docker inspect -f '{{.State.Status}}' email 2>/dev/null | grep -Eq '^running$'"
+      logs: "docker logs --tail 100 email 2>&1 || true"
     cart:
       provider: custom
       status: "docker inspect -f '{{.State.Status}}' cart 2>/dev/null | grep -Eq '^running$'"
