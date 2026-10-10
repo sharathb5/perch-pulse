@@ -26,6 +26,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newAuthCmd())
 	root.AddCommand(newConfigCmd())
 	root.AddCommand(newContextCmd())
+	root.AddCommand(newPulseCmd())
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newGraphCmd())
 	root.AddCommand(newEdgeCmd())

@@ -32,10 +32,22 @@ Writes gitignored artifacts under `results/`:
 
 Control false positives count latency/error findings on the labeled target only; demo `call_rate` burstiness alone is not scored as a control FP. Attribution prefers findings on the labeled target when present.
 
+## Change / deployment correlation
+
+```bash
+./examples/astronomy-shop/eval/run-change-eval.sh
+```
+
+Sequence: baseline → **simulated** deploy marker → fault → detect → incident snapshot → correlate → recover → `changeeval`.
+
+Correlation scoring uses only incident + change events (no scenario labels). Markers are modeled change events, not real cloud deploys. See [`../change/README.md`](../change/README.md).
+
 ## CI
 
 ```bash
-go test ./internal/pulse/detect/... ./internal/pulse/evaluate/... ./internal/pulse/telem/... -count=1
+go test ./internal/pulse/detect/... ./internal/pulse/evaluate/... ./internal/pulse/telem/... \
+  ./internal/pulse/change/... ./internal/pulse/incident/... ./internal/pulse/correlate/... \
+  ./internal/pulse/changeeval/... -count=1
 ```
 
 Live Docker evaluation is **not** part of `make verify`.

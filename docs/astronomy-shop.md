@@ -247,6 +247,17 @@ Telemetry-only detection (Prometheus spanmetrics p99 latency + error/call rates 
 
 See [`examples/astronomy-shop/eval/README.md`](../examples/astronomy-shop/eval/README.md) and ADR-012. Packages: `internal/pulse/telem`, `internal/pulse/detect` (no scenario import), `internal/pulse/evaluate`.
 
+## Change / deployment correlation
+
+Typed change events + incident evidence snapshots + deterministic correlation (ADR-013). Demo markers are **simulated** (not real cloud deploys):
+
+```bash
+./examples/astronomy-shop/change/deploy-marker.sh astronomy/local/payment abc123
+./examples/astronomy-shop/eval/run-change-eval.sh
+```
+
+Packages: `internal/pulse/change`, `internal/pulse/incident`, `internal/pulse/correlate` (no scenario import), `internal/pulse/changeeval`. CLI: `perch pulse change-record|changes|incident|context`.
+
 ## CI vs live verification
 
 | Check | Where |
@@ -254,9 +265,11 @@ See [`examples/astronomy-shop/eval/README.md`](../examples/astronomy-shop/eval/R
 | Mapping schema, uniqueness, required services, observation compatibility | `go test ./internal/pulse/astronomy/...` (part of `make verify`) |
 | Scenario schema, lifecycle, label separation, secrets | `go test ./internal/pulse/scenario/...` (part of `make verify`) |
 | Detector baseline/findings/attribution + evaluator metrics | `go test ./internal/pulse/detect/... ./internal/pulse/evaluate/...` (part of `make verify`) |
+| Change/incident/correlate + changeeval fixtures | `go test ./internal/pulse/change/... ./internal/pulse/incident/... ./internal/pulse/correlate/... ./internal/pulse/changeeval/...` (part of `make verify`) |
 | Clone + `make start-minimal` + frontend/Jaeger | `./examples/astronomy-shop/scripts/verify-live.sh` (**not** in CI; Docker-heavy) |
 | Start/stop each catalog scenario + recovery | `./examples/astronomy-shop/scenarios/verify-scenarios.sh` (**not** in CI) |
 | Full detector eval vs ground truth | `./examples/astronomy-shop/eval/run-detector-eval.sh` (**not** in CI) |
+| Change correlation eval (simulated markers) | `./examples/astronomy-shop/eval/run-change-eval.sh` (**not** in CI) |
 
 If live verify cannot run (Docker down, insufficient disk/RAM), the script exits non-zero with a clear reason. That does not fail `make verify`.
 

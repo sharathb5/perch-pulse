@@ -28,6 +28,21 @@ Rules:
 
 ---
 
+## ADR-013: Deterministic change↔incident correlation (not causation)
+
+**Date:** 2026-10-09  
+**Status:** Accepted
+
+**Context:** Issue #15 needs Pulse to answer “what changed shortly before this regression?” without claiming root cause, without LLMs, without Databricks, and without feeding scenario ground-truth into scoring. Incident evidence snapshots were not yet on `main`, so a minimal incident package is included as correlation input.
+
+**Decision:** Add `internal/pulse/change` (`pulse.change.v1`: commit / pull_request_merge / deployment; local Memory + FileStore; CLI `perch pulse change-record`; simulated deploy markers via `examples/astronomy-shop/change/`), `internal/pulse/incident` (`pulse.incident.v1` before/during/after digests from findings + samples; observations vs inferences vs limitations), and `internal/pulse/correlate` (explainable scorer `temporal-service-overlap-v1`). Scoring factors: temporal proximity (linear decay over 30m lookback), primary-service overlap, topology overlap, environment match; post-incident and env-mismatch changes excluded; ranking by score ↓, temporal distance ↑, change_id ↑. Strong candidate requires score ≥ 50 and primary/topology overlap. Post-hoc `internal/pulse/changeeval` scores top-1/top-3 against fixture expected change IDs only after correlation output exists. Service mapping prefers explicit `--service` IDs; optional path-prefix rules with `unknown`/`partial` uncertainty — never inferred from ground truth. Demo harness records a **simulated** deploy marker, then activates the existing flagd fault separately.
+
+**Consequences:** Agents can cite “deployment X occurred Ns before regression on service Y” as correlation. Detector thresholds untouched. Basic Perch remains Databricks-independent. Live Astronomy Shop change-eval is scripted, not part of `make verify`.
+
+**Alternatives considered:** LLM ranking (rejected: opacity); treating correlation as causation in summaries (rejected: invariant); requiring GitHub API for ingestion (rejected: credentials/cloud); inferring affected services from scenario labels (rejected: leakage); full semantic diff analysis (deferred).
+
+---
+
 ## ADR-012: Explainable rolling-window baseline detector with post-hoc evaluation
 
 **Date:** 2026-10-09  
