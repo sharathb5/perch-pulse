@@ -31,7 +31,7 @@ flowchart TB
 
   subgraph ui["Embedded web UI"]
     SPA["web/dist via go:embed"]
-    API["/api/graph /status /logs /credentials"]
+    API["/api/graph /status /logs /credentials /pulse/*"]
     SPA --> API
   end
 
@@ -40,6 +40,7 @@ flowchart TB
   API --> G
   API --> SS
   API --> SL
+  API -.-> PulseAPI["internal/pulse/api"]
   Vendors["Provider APIs / CLIs"] --> SS
   Vendors --> SL
 ```
@@ -98,11 +99,13 @@ Keep Pulse modular and optional relative to Part A. Prefer packages under `inter
 | Incident evidence | `internal/pulse/incident` | Before/during/after digests from findings + samples; obs vs inference. |
 | Change correlation | `internal/pulse/correlate` | Deterministic temporal/service ranking; **not** causation. |
 | Change attribution eval | `internal/pulse/changeeval` | Scores correlations vs fixture expected change IDs **after** correlation. |
+| Read-only viz API | `internal/pulse/api` | Localhost JSON for services/incidents/changes/correlation; mounts on existing `perch viz` mux. |
 
 Phase 2 local target setup (docs/scripts, not a collector): [`astronomy-shop.md`](astronomy-shop.md), [`examples/astronomy-shop/`](../examples/astronomy-shop/).  
 Scenario harness: [`examples/astronomy-shop/scenarios/`](../examples/astronomy-shop/scenarios/).  
 Detector / change eval: [`examples/astronomy-shop/eval/`](../examples/astronomy-shop/eval/).  
-Change markers: [`examples/astronomy-shop/change/`](../examples/astronomy-shop/change/).
+Change markers: [`examples/astronomy-shop/change/`](../examples/astronomy-shop/change/).  
+Pulse HTTP contracts: [`pulse-api.md`](pulse-api.md).
 
 ### Proposed (not implemented)
 
@@ -127,6 +130,7 @@ flowchart LR
     COR["correlate changes (implemented)"]
     CHEVAL["changeeval (implemented)"]
     AGENT["Agent context packager"]
+    API["Read-only viz API (implemented)"]
   end
 
   subgraph backends["Retention backends"]
@@ -148,6 +152,10 @@ flowchart LR
   INC --> COR
   COR --> CHEVAL
   COR -.-> AGENT
+  INC --> API
+  CHG --> API
+  COR --> API
+  HIST -.-> API
   CHG -.-> DBX
 ```
 

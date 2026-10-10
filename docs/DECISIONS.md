@@ -28,6 +28,31 @@ Rules:
 
 ---
 
+## ADR-014: Read-only Pulse HTTP API on existing `perch viz` server
+
+**Date:** 2026-10-10  
+**Status:** Accepted
+
+**Context:** Issues #17/#18 need the React UI to consume real Pulse incidents, changes, correlations, and service intelligence without a second Go server, without mock data, and without collapsing Pulse intelligence into active health probes. Observation history remains process-local (`store.Memory`); incidents/changes are already persisted under `.perch/pulse` / `$PERCH_PULSE_DIR`.
+
+**Decision:** Mount read-only handlers on the existing localhost viz mux (`internal/pulse/api` + `internal/cli/viz_pulse.go`):
+
+| Route | Source |
+|-------|--------|
+| `GET /api/pulse/services` | Union of service IDs from persisted incidents/changes; optional process-local observations; never invents healthy from missing data |
+| `GET /api/pulse/incidents` | `incident.FileStore` (bounded, newest-first) |
+| `GET /api/pulse/incidents/{id...}` | FileStore get + on-read `correlate.Correlate` embedded in the detail payload |
+| `GET /api/pulse/changes` | `change.FileStore` (bounded, newest-first) |
+| `GET /api/pulse/changes/{id...}` | FileStore get |
+
+Explicit split: `/api/status` = active probes; `/api/pulse/services` = intelligence (with `active_health_note`). Graph↔Pulse IDs use the Astronomy Shop compose_service mapping only (no display-name heuristics). Responses are versioned snapshot JSON; corrupted artifacts return typed errors (no mock fallback). No background collector, Databricks, WebSockets, or write/remediation endpoints. Scenario/evaluate/changeeval packages are not imported.
+
+**Consequences:** Milestone B can overlay intelligence onto graph nodes via `service_id` / `graph_node` without replacing `/api/graph`. Viz still starts when the Pulse dir is empty. Live Astronomy Shop Docker is not required for CI.
+
+**Alternatives considered:** Separate Pulse microservice (rejected: scope); polling Prometheus from the browser (rejected: PromQL/security); embedding GT eval JSON as the API (rejected: label leakage / wrong source of truth); collapsing probe health into Pulse status (rejected: stale≠healthy invariant).
+
+---
+
 ## ADR-013: Deterministic change↔incident correlation (not causation)
 
 **Date:** 2026-10-09  
