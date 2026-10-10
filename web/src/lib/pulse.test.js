@@ -4,20 +4,36 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { deriveStatus, mapGraphToNodes } from './mappers.js'
 import {
+  INCIDENT_STATE,
   PULSE_KIND,
+  PULSE_TAB,
   assertProbeStatusUntouched,
+  buildDigestComparisonRows,
+  buildPulseOverview,
   containsGroundTruthLeak,
+  correlationCandidateLabel,
+  correlationStrengthSummary,
   decodeIncidentId,
   derivePulseKind,
   describePulseDataSources,
   encodeIncidentId,
   enrichServicePulse,
+  filterChanges,
+  filterIncidents,
+  formatSignalValue,
+  indexGraphNodeByServiceId,
   indexPulseByGraphNode,
+  isSimulatedChange,
+  normalizePulseTab,
+  parseChangeDetailResponse,
+  parseChangesResponse,
   parseIncidentDetailResponse,
   parseIncidentsResponse,
   parseServicesResponse,
   pulseIncidentApiPath,
   pulseIncidentPath,
+  pulseStackPath,
+  sortChangesDeterministic,
   sortIncidentsDeterministic,
 } from './pulse.js'
 
@@ -36,6 +52,8 @@ const servicesEmpty = load('pulse.services.empty.json')
 const incidentsHistorical = load('pulse.incidents.historical.json')
 const incidentsOpen = load('pulse.incidents.open.json')
 const incidentDetail = load('pulse.incident.detail.json')
+const changesFixture = load('pulse.changes.json')
+const changesEmpty = load('pulse.changes.empty.json')
 
 describe('parseServicesResponse', () => {
   it('parses contract fixtures and indexes by graph_node only', () => {
@@ -187,10 +205,18 @@ describe('URL-safe incident navigation', () => {
     expect(enc).not.toContain('/')
     expect(enc).not.toContain('|')
     expect(decodeIncidentId(enc)).toBe(id)
-    expect(pulseIncidentPath('fixture-stack', 'api', id)).toContain('?incident=')
-    expect(pulseIncidentPath('fixture-stack', 'api', id)).toContain(enc)
+    const path = pulseIncidentPath('fixture-stack', 'api', id)
+    expect(path).toContain('incident=')
+    expect(path).toContain(`pulse=${PULSE_TAB.INCIDENTS}`)
+    expect(path).toContain(enc)
     // API path keeps raw id (Go {id...}); must not use PathEscape that breaks mux.
     expect(pulseIncidentApiPath(id)).toBe(`/api/pulse/incidents/${id}`)
+  })
+
+  it('pulseStackPath preserves node when closing sidebar', () => {
+    expect(pulseStackPath('fixture-stack', { nodeId: 'api' })).toBe('/stack/fixture-stack/api')
+    expect(normalizePulseTab('overview')).toBe(PULSE_TAB.OVERVIEW)
+    expect(normalizePulseTab('nope')).toBe(null)
   })
 
   it('parses incident detail contract', () => {
@@ -198,6 +224,7 @@ describe('URL-safe incident navigation', () => {
     expect(parsed.ok).toBe(true)
     expect(parsed.response.graphNode).toBe('api')
     expect(parsed.response.incident.open).toBe(false)
+    expect(parsed.response.incident.state).toBe(INCIDENT_STATE.RECOVERED)
     expect(containsGroundTruthLeak(parsed.response)).toBe(false)
   })
 })
@@ -232,5 +259,152 @@ describe('API error shapes', () => {
   it('parseServicesResponse fails closed on null/invalid', () => {
     expect(parseServicesResponse(null).ok).toBe(false)
     expect(parseServicesResponse({ schema_version: 'wrong' }).ok).toBe(false)
+  })
+})
+
+describe('Milestone C — overview, digests, correlation, changes', () => {
+  it('builds overview counts without inventing resource metrics', () => {
+    const services = parseServicesResponse(servicesHistorical).response
+    const incidents = parseIncidentsResponse(incidentsHistorical).response
+    const changes = parseChangesResponse(changesFixture).response
+    const overview = buildPulseOverview({
+      servicesResponse: services,
+      incidentsResponse: incidents,
+      changesResponse: changes,
+    })
+    expect(overview.mappedServiceCount).toBe(2)
+    expect(overview.incidentCount).toBe(2)
+    expect(overview.recoveredCount).toBe(2)
+    expect(overview.unresolvedCount).toBe(0)
+    expect(overview.mostRecentIncident?.primaryServiceId).toBe('fixture/production/api')
+    expect(overview.latestChange?.simulated).toBe(true)
+    expect(overview.environments).toContain('production')
+    expect(overview.flags.noResourceMetrics).toBe(true)
+    expect(overview.flags.unresolvedIsNotLiveOutage).toBe(true)
+    expect(overview.sourceInfo.liveObservations).toBe(false)
+  })
+
+  it('discloses truncated incident/change lists', () => {
+    const overview = buildPulseOverview({
+      servicesResponse: parseServicesResponse(servicesEmpty).response,
+      incidentsResponse: { ...parseIncidentsResponse(incidentsHistorical).response, count: 50, limit: 50 },
+      changesResponse: { ...parseChangesResponse(changesFixture).response, count: 50, limit: 50 },
+    })
+    expect(overview.incidentListTruncated).toBe(true)
+    expect(overview.changeListTruncated).toBe(true)
+    expect(overview.limitations.some((l) => l.includes('may be incomplete'))).toBe(true)
+  })
+
+  it('filters recovered vs unresolved and by service', () => {
+    const open = parseIncidentsResponse(incidentsOpen).response.incidents
+    const unresolved = filterIncidents(open, { state: INCIDENT_STATE.UNRESOLVED })
+    const recovered = filterIncidents(open, { state: INCIDENT_STATE.RECOVERED })
+    expect(unresolved.every((i) => i.open)).toBe(true)
+    expect(recovered.every((i) => !i.open)).toBe(true)
+    const apiOnly = filterIncidents(open, { serviceId: 'fixture/production/api' })
+    expect(apiOnly.every((i) => i.primaryServiceId === 'fixture/production/api')).toBe(true)
+  })
+
+  it('formats before/during/after digests and missing measurements as N/A', () => {
+    const parsed = parseIncidentDetailResponse(incidentDetail)
+    const rows = buildDigestComparisonRows(parsed.response.incident)
+    const latency = rows.find((r) => r.signal === 'latency_ms')
+    expect(latency.before.display).toContain('ms')
+    expect(latency.during.display).toContain('820')
+    const errorRate = rows.find((r) => r.signal === 'error_rate')
+    expect(errorRate.after.display).toBe('N/A')
+    expect(formatSignalValue('error_rate', 0.02)).toBe('2%')
+    expect(formatSignalValue('call_rate', 1.25)).toContain('/s')
+    expect(formatSignalValue('latency_ms', null)).toBe('N/A')
+    expect(formatSignalValue('latency_ms', Number.NaN)).toBe('N/A')
+  })
+
+  it('keeps evidence vs inference separation and correlation ≠ probability/causation', () => {
+    const parsed = parseIncidentDetailResponse(incidentDetail)
+    const inc = parsed.response.incident
+    expect(inc.observations.length).toBeGreaterThan(0)
+    expect(inc.inferences.length).toBeGreaterThan(0)
+    expect(inc.observations.join(' ')).not.toMatch(/root cause is/i)
+    const corr = parsed.response.correlation
+    expect(corr.strongCandidate).toBe(true)
+    expect(corr.candidates[0].scoreIsProbability).toBe(false)
+    expect(correlationCandidateLabel(72.5)).toBe('correlated change')
+    expect(correlationCandidateLabel(10)).toBe('weak candidate')
+    expect(correlationCandidateLabel(0)).toBe('no strong candidate')
+    const summary = correlationStrengthSummary(corr)
+    expect(summary.label).toContain('correlated')
+    expect(summary.detail.toLowerCase()).toContain('not proven causation')
+  })
+
+  it('labels simulated deployment markers from contract fields', () => {
+    const changes = parseChangesResponse(changesFixture).response.changes
+    expect(changes.every((c) => c.simulated)).toBe(true)
+    expect(changes[0].classification).toBe('simulated_deployment_marker')
+    expect(
+      isSimulatedChange({
+        metadata: {},
+        source: 'github-actions',
+        summary: 'real deploy',
+        evidence: [],
+      }),
+    ).toBe(false)
+    // Substring "sim" alone must not mark simulated (Codex P2).
+    expect(
+      isSimulatedChange({
+        metadata: {},
+        source: 'simple-ci',
+        summary: 'production deploy',
+        evidence: [],
+      }),
+    ).toBe(false)
+  })
+
+  it('indexes service_id → graph_node without fuzzy matching', () => {
+    const services = parseServicesResponse(servicesHistorical).response
+    const bySid = indexGraphNodeByServiceId(services)
+    expect(bySid.get('fixture/production/api')).toBe('api')
+    expect(bySid.has('Shipping Service')).toBe(false)
+  })
+
+  it('parses changes list/detail and sorts deterministically', () => {
+    const list = parseChangesResponse(changesFixture)
+    expect(list.ok).toBe(true)
+    expect(list.response.changes).toHaveLength(2)
+    const empty = parseChangesResponse(changesEmpty)
+    expect(empty.ok).toBe(true)
+    expect(empty.response.changes).toEqual([])
+    const sorted = sortChangesDeterministic(list.response.changes)
+    expect(sorted[0].changeId).toContain('sim-fixture-api')
+    const filtered = filterChanges(list.response.changes, {
+      serviceId: 'fixture/production/web',
+    })
+    expect(filtered).toHaveLength(1)
+    const detail = parseChangeDetailResponse({
+      schema_version: 'pulse.api.change.v1',
+      generated_at: '2026-10-10T12:00:00Z',
+      data_sources: changesFixture.data_sources,
+      change: changesFixture.changes[0],
+      graph_nodes: ['api'],
+    })
+    expect(detail.ok).toBe(true)
+    expect(detail.response.graphNodes).toEqual(['api'])
+  })
+
+  it('rejects ground-truth in changes and never paints empty as healthy', () => {
+    expect(parseChangesResponse({ ...changesEmpty, ground_truth: {} }).ok).toBe(false)
+    const overview = buildPulseOverview({
+      servicesResponse: parseServicesResponse(servicesEmpty).response,
+      incidentsResponse: parseIncidentsResponse({
+        schema_version: 'pulse.api.incidents.v1',
+        generated_at: '2026-10-10T12:00:00Z',
+        data_sources: { observations: 'process_memory_unavailable', incidents: 'file_store' },
+        count: 0,
+        limit: 50,
+        incidents: [],
+      }).response,
+      changesResponse: parseChangesResponse(changesEmpty).response,
+    })
+    expect(overview.incidentCount).toBe(0)
+    expect(overview.sourceInfo.liveObservations).toBe(false)
   })
 })

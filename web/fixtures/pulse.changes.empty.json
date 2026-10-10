@@ -1,0 +1,13 @@
+{
+  "schema_version": "pulse.api.changes.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "data_sources": {
+    "observations": "process_memory_unavailable",
+    "incidents": "file_store",
+    "changes": "file_store"
+  },
+  "limitations": [],
+  "count": 0,
+  "limit": 50,
+  "changes": []
+}

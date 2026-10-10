@@ -76,7 +76,7 @@ No custom `@font-face` or Google Fonts.
 
 - Full-viewport column: `h-screen flex flex-col`.
 - Navbar height: `h-12`, horizontal `px-4`.
-- Main row: graph `flex-1` + optional detail panel fixed `w-[300px]`.
+- Main row: graph `flex-1` + optional detail panel fixed `w-[300px]` + optional Pulse sidebar fixed `w-[360px]` (both may be open; ADR-017).
 - Service cards: fixed visual width `210px` (`NODE_WIDTH`); Dagre height budget `NODE_HEIGHT = 300`.
 - Card internal padding: mostly `px-2.5` / `py-2`.
 - Dagre: `rankdir: LR`, `ranksep: 120`, `nodesep: 88`, margins 32.
@@ -91,15 +91,20 @@ No custom `@font-face` or Google Fonts.
 App (BrowserRouter)
 └── StackView
     ├── error banner (optional)
-    ├── Navbar
+    ├── Navbar (includes Pulse entry)
     ├── ReactFlowProvider → PerchGraph
     │     └── ServiceCard (node type `serviceCard`)
-    └── DetailPanel (when :nodeId present)
-          ├── DeployRow
-          └── logs / credentials setup UI
+    ├── DetailPanel (when :nodeId present)
+    │     ├── DeployRow
+    │     ├── PulseSection (compact)
+    │     └── logs / credentials setup UI
+    └── PulseSidebar (when ?pulse=… or ?incident=…)
+          ├── Overview
+          ├── Incidents → investigation
+          └── Changes
 ```
 
-Supporting: `StatusPill`, `ProviderBadge`, `PulseIndicator`, `PulseSection`, hooks `usePerchData` / `useNodeLogs` / `usePulseData` / `usePulseIncident`, mappers in `lib/mappers.js`, Pulse adapters in `lib/pulse.js`, AI handoff in `lib/aiHandoff.js`.
+Supporting: `StatusPill`, `ProviderBadge`, `PulseIndicator`, `PulseSection`, `PulseSidebar`, hooks `usePerchData` / `useNodeLogs` / `usePulseData` / `usePulseIncident`, mappers in `lib/mappers.js`, Pulse adapters in `lib/pulse.js`, AI handoff in `lib/aiHandoff.js`.
 
 ---
 

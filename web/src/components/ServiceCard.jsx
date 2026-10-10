@@ -1,6 +1,7 @@
 import { Handle, Position } from '@xyflow/react'
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { decodeIncidentId, normalizePulseTab, pulseStackPath } from '../lib/pulse.js'
 import { buildErrorPrompt, isErroredNode, openInAIWithFallback } from '../lib/aiHandoff.js'
 import { ProviderBadge } from './ProviderBadge.jsx'
 import { PulseIndicator } from './PulseIndicator.jsx'
@@ -27,10 +28,17 @@ function metaValueClass(semantic) {
 export function ServiceCard({ data, selected }) {
   const { stackName } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const id = data.id
 
   const go = () => {
-    navigate(`/stack/${stackName}/${id}`)
+    navigate(
+      pulseStackPath(stackName, {
+        nodeId: id,
+        pulseTab: normalizePulseTab(searchParams.get('pulse')),
+        incidentId: decodeIncidentId(searchParams.get('incident')) || null,
+      }),
+    )
   }
 
   const ring = selected ? 'border-gray-400 ring-2 ring-gray-200' : 'border-gray-200'
