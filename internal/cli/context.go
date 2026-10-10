@@ -13,6 +13,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yashg4509/perch/internal/config"
 	"github.com/yashg4509/perch/internal/graph"
+	"github.com/yashg4509/perch/internal/pulse/change"
+	"github.com/yashg4509/perch/internal/pulse/correlate"
+	"github.com/yashg4509/perch/internal/pulse/incident"
 	"github.com/yashg4509/perch/internal/stackcontext"
 	"github.com/yashg4509/perch/internal/stackstatus"
 )
@@ -87,7 +90,10 @@ func runContext(cmd *cobra.Command, args []string) error {
 	out := cmd.OutOrStdout()
 	if forAgent {
 		_ = noColor
-		return writeContextForAgent(out, r)
+		if err := writeContextForAgent(out, r); err != nil {
+			return err
+		}
+		return appendPulseAgentContext(out)
 	}
 	_ = noColor
 	enc := json.NewEncoder(out)
@@ -109,5 +115,35 @@ func writeContextForAgent(w io.Writer, r *stackcontext.Report) error {
 		_, _ = b.WriteString(stackstatus.FormatHuman(r.Stack, r.Environment, r.StatusReport))
 	}
 	_, err := w.Write([]byte(b.String()))
+	return err
+}
+
+// appendPulseAgentContext adds a compact Pulse correlation brief when local
+// Pulse data exists. Absence of Pulse data is not an error.
+func appendPulseAgentContext(w io.Writer) error {
+	dir, err := pulseDataDir(nil)
+	if err != nil {
+		return nil
+	}
+	incs, err := incident.NewFileStore(dir).List()
+	if err != nil || len(incs) == 0 {
+		return nil
+	}
+	inc := incs[len(incs)-1]
+	changes, err := change.NewFileStore(dir).List()
+	if err != nil {
+		return nil
+	}
+	rep, err := correlate.Correlate(inc, changes, correlate.DefaultConfig())
+	if err != nil {
+		return nil
+	}
+	var top *change.Event
+	if rep.Top1 != nil {
+		if ev, ok, _ := change.NewFileStore(dir).Get(rep.Top1.ChangeID); ok {
+			top = &ev
+		}
+	}
+	_, err = fmt.Fprint(w, "\n"+correlate.FormatAgentContext(inc, rep, top))
 	return err
 }

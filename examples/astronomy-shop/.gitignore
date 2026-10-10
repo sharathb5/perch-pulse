@@ -8,3 +8,6 @@ scenarios/results/
 
 # Detector evaluation artifacts (findings + scores; local only)
 eval/results/
+
+# Simulated change/deploy markers + incident snapshots (local only)
+change/results/

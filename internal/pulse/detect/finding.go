@@ -126,3 +126,17 @@ func FindingIDFor(serviceID string, signal SignalType, first time.Time) string {
 func (f Finding) Open() bool {
 	return f.RecoveredAt == nil
 }
+
+// SeverityRank returns a comparable urgency rank (higher is worse).
+func (f Finding) SeverityRank() int {
+	switch f.Severity {
+	case SeverityCritical:
+		return 3
+	case SeverityWarning:
+		return 2
+	case SeverityInfo:
+		return 1
+	default:
+		return 0
+	}
+}

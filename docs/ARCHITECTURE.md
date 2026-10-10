@@ -94,10 +94,15 @@ Keep Pulse modular and optional relative to Part A. Prefer packages under `inter
 | Telemetry source | `internal/pulse/telem` | Replaceable sample collectors; Prometheus spanmetrics first. |
 | Baseline detector | `internal/pulse/detect` | Explainable rolling-window regressions → `Finding`; **no** scenario import. |
 | Ground-truth evaluation | `internal/pulse/evaluate` | Scores findings vs completed scenario records **after** detection. |
+| Change events | `internal/pulse/change` | Typed commit/PR/deployment events + local store; simulated deploy markers for demos. |
+| Incident evidence | `internal/pulse/incident` | Before/during/after digests from findings + samples; obs vs inference. |
+| Change correlation | `internal/pulse/correlate` | Deterministic temporal/service ranking; **not** causation. |
+| Change attribution eval | `internal/pulse/changeeval` | Scores correlations vs fixture expected change IDs **after** correlation. |
 
 Phase 2 local target setup (docs/scripts, not a collector): [`astronomy-shop.md`](astronomy-shop.md), [`examples/astronomy-shop/`](../examples/astronomy-shop/).  
 Scenario harness: [`examples/astronomy-shop/scenarios/`](../examples/astronomy-shop/scenarios/).  
-Detector eval: [`examples/astronomy-shop/eval/`](../examples/astronomy-shop/eval/).
+Detector / change eval: [`examples/astronomy-shop/eval/`](../examples/astronomy-shop/eval/).  
+Change markers: [`examples/astronomy-shop/change/`](../examples/astronomy-shop/change/).
 
 ### Proposed (not implemented)
 
@@ -117,8 +122,10 @@ flowchart LR
     TELEM["telem.Prometheus (implemented)"]
     DET["detect baseline (implemented)"]
     EVAL["evaluate vs GT (implemented)"]
-    INV["Investigation / evidence"]
-    DEP["Deploy impact"]
+    CHG["change events (implemented)"]
+    INC["incident evidence (implemented)"]
+    COR["correlate changes (implemented)"]
+    CHEVAL["changeeval (implemented)"]
     AGENT["Agent context packager"]
   end
 
@@ -136,14 +143,15 @@ flowchart LR
   TELEM --> DET
   DET --> EVAL
   GT --> EVAL
-  OBS -.-> INV
-  DET -.-> DEP
-  DEP -.-> INV
-  INV -.-> AGENT
-  DEP -.-> DBX
+  DET --> INC
+  CHG --> COR
+  INC --> COR
+  COR --> CHEVAL
+  COR -.-> AGENT
+  CHG -.-> DBX
 ```
 
-Ground-truth (`scenario`) feeds **evaluate only** after findings exist. `detect` never imports `scenario`.
+Ground-truth (`scenario`) feeds **evaluate** / harness marker placement only after findings exist. `detect` and `correlate` never import `scenario`.
 
 Solid edges mark implemented package relationships that already exist in-tree
 (`store.Memory` backs `Store`). Dashed edges are planned callers/integration

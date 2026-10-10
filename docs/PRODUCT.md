@@ -32,7 +32,7 @@ These capabilities ship in the current repository:
 
 Point-in-time probes and log fetches are the source of truth today. There is **no** warehouse-backed history, deploy-impact engine, or Pulse investigation API in-tree yet.
 
-**Phase 2 local target:** OpenTelemetry Astronomy Shop can be run beside Perch via documented scripts; see [`astronomy-shop.md`](astronomy-shop.md). A **ground-truth scenario harness** lives under `examples/astronomy-shop/scenarios/`. An explainable **telemetry-only baseline detector** and post-hoc evaluator live under `internal/pulse/{telem,detect,evaluate}` with a live harness at `examples/astronomy-shop/eval/` — not an AI investigator.
+**Phase 2 local target:** OpenTelemetry Astronomy Shop can be run beside Perch via documented scripts; see [`astronomy-shop.md`](astronomy-shop.md). A **ground-truth scenario harness** lives under `examples/astronomy-shop/scenarios/`. An explainable **telemetry-only baseline detector** and post-hoc evaluator live under `internal/pulse/{telem,detect,evaluate}` with a live harness at `examples/astronomy-shop/eval/` — not an AI investigator. **Change/deployment correlation** (`internal/pulse/{change,incident,correlate,changeeval}`) ranks recent typed change events against incident evidence; correlation is never presented as proven causation. Simulated deploy markers for demos: `examples/astronomy-shop/change/`.
 
 ---
 

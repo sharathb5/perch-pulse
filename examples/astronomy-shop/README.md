@@ -58,6 +58,18 @@ See [`scenarios/README.md`](scenarios/README.md). Labels are evaluation-only (AD
 ./examples/astronomy-shop/eval/run-detector-eval.sh
 ```
 
+## Change / deployment correlation
+
+```bash
+# Simulated deploy marker (not a real cloud deploy)
+./examples/astronomy-shop/change/deploy-marker.sh astronomy/local/payment abc123
+
+# Live: marker → fault → detect → incident → correlate → changeeval
+./examples/astronomy-shop/eval/run-change-eval.sh
+```
+
+See [`change/README.md`](change/README.md) and ADR-013.
+
 See [`eval/README.md`](eval/README.md) and ADR-012.
 
 ## Validation without Docker
