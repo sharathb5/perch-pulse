@@ -38,6 +38,7 @@ Tracks what Perch + Pulse verification actually proves. Related: issue [#26](htt
 | Sidebar overview / investigation digests | `pulse-sidebar.spec.js`, Vitest | Bind to pipeline fixture digests | Vitest contract (UNIT); Playwright reuse (BROWSER) |
 | Screenshot baselines | `web/e2e/__screenshots__` | — | Keep; no redundant shots |
 | Live Astronomy Shop smoke | `verify-live.sh` (local) | GHA manual workflow | `.github/workflows/astronomy-smoke.yml` (LIVE SMOKE, dispatch only) |
+| Same-trace multi-service Jaeger proof | — | Soft WARN on service list only | `internal/pulse/astronomy/tracesmoke` fixtures (UNIT) + `cmd/trace-smoke` in `ci-smoke.sh` (LIVE SMOKE) |
 
 ## Gates
 
@@ -56,6 +57,7 @@ Tracks what Perch + Pulse verification actually proves. Related: issue [#26](htt
 3. **Live smoke capacity:** Full Astronomy Shop may exceed free GitHub-hosted disk/RAM after image pulls. The smoke workflow preflights resources and fails with diagnostics rather than claiming success.
 4. **No Databricks / external AI / paid monitoring** in any required gate.
 5. Detector thresholds are **not** tuned for tests; failing honest scenarios are reported as gaps.
+6. **Live trace smoke:** proves recommendations-browse (`frontend` + `recommendation` [+ `product-catalog`]) in one Jaeger trace via a unique User-Agent marker on the marked-request span subgraph (default 120s deadline). Does **not** prove checkout/payment/email. workflow_dispatch may need the updated workflow on the default branch before the new assertions run remotely.
 
 ## Commands
 

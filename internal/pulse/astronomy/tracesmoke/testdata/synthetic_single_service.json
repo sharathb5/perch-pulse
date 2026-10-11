@@ -1,0 +1,31 @@
+{
+  "_comment": "SYNTHETIC Jaeger traces response: only frontend in one trace",
+  "data": [
+    {
+      "traceID": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "spans": [
+        {
+          "traceID": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "spanID": "aaaaaaaaaaaaaaaa",
+          "operationName": "GET",
+          "references": [],
+          "startTime": 1700000001000000,
+          "duration": 1000,
+          "tags": [
+            {"key": "http.url", "type": "string", "value": "http://127.0.0.1:8080/api/recommendations?productIds=OLJCESPC7Z"},
+            {"key": "user_agent", "type": "string", "value": "perch-astronomy-smoke/run-test-marker"}
+          ],
+          "processID": "p1"
+        }
+      ],
+      "processes": {
+        "p1": {"serviceName": "frontend", "tags": []}
+      },
+      "warnings": null
+    }
+  ],
+  "total": 0,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

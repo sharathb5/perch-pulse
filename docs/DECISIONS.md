@@ -28,6 +28,27 @@ Rules:
 
 ---
 
+## ADR-019: Astronomy smoke requires same-trace multi-service evidence
+
+**Date:** 2026-10-11  
+**Status:** Accepted  
+**Issue:** #26 (parent #17); prepares evidence path for #25 (Run Pulse)
+
+**Context:** The first Astronomy Smoke dispatch (run 38110235241) passed while only warning that Jaeger lacked `frontend`/`checkout`/`frontend-proxy`. Investigation showed (1) curl of `/` serves Next.js HTML without executing client-side `/api/products` fetches, (2) the check inspected Jaeger's global service list rather than one distributed trace, and (3) missing evidence was downgraded to WARN. Background load-generator traffic can populate unrelated service names without proving the smoke's own path.
+
+**Decision:**
+1. Keep storefront GET + prior Perch graph/status checks.
+2. Add a bounded, read-only **recommendations browse** probe (`GET /api/recommendations?productIds=…`, Locust `get_recommendations`) identified by a unique `User-Agent` marker already recorded by demo HTTP instrumentation.
+3. Qualify Jaeger `/api/traces` responses in `internal/pulse/astronomy/tracesmoke` (fixture-tested): same trace, ≥2 of `{frontend, recommendation, product-catalog}` in the **marked-request span subgraph**, test-window timestamps, mapping allowlist, and a cross-service `CHILD_OF` edge on that subgraph.
+4. Poll under one context deadline (default 120s) with interval 3s; query prefer `user_agent` tag filter; malformed Jaeger JSON fails immediately; no qualifying trace **fails** the smoke (never WARN).
+5. On failure, write bounded **redacted** artifacts (compact span summaries, service-name lists, scrubbed `docker logs --tail` — not raw telemetry dumps); upload with `if-no-files-found: ignore`.
+
+**Consequences:** Live smoke becomes an honest distributed-trace gate without implementing Run Pulse UI. Deterministic fixture tests stay in `make verify`; Docker live run remains workflow_dispatch-only.
+
+**Alternatives considered:** Waiting longer on the services list (rejected: wrong assertion); checkout/order path (rejected: email/payment side effects); custom traceparent baggage (rejected: not assuming arbitrary header propagation); accepting independent service-list membership (rejected: not same-trace proof).
+
+---
+
 ## ADR-018: Milestone C.5 CI reliability gates
 
 **Date:** 2026-10-11  

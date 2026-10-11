@@ -1,0 +1,98 @@
+{
+  "_comment": "SYNTHETIC Jaeger traces response: multi-service recommendations browse path",
+  "data": [
+    {
+      "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "spans": [
+        {
+          "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "spanID": "1111111111111111",
+          "operationName": "GET",
+          "references": [],
+          "startTime": 1700000001000000,
+          "duration": 12000,
+          "tags": [
+            {"key": "http.method", "type": "string", "value": "GET"},
+            {"key": "http.url", "type": "string", "value": "http://127.0.0.1:8080/api/recommendations?productIds=OLJCESPC7Z"},
+            {"key": "http.status_code", "type": "int64", "value": 200},
+            {"key": "user_agent", "type": "string", "value": "perch-astronomy-smoke/run-test-marker"}
+          ],
+          "processID": "p1"
+        },
+        {
+          "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "spanID": "2222222222222222",
+          "operationName": "GET",
+          "references": [
+            {"refType": "CHILD_OF", "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "spanID": "1111111111111111"}
+          ],
+          "startTime": 1700000001000500,
+          "duration": 11000,
+          "tags": [
+            {"key": "http.request.method", "type": "string", "value": "GET"},
+            {"key": "http.response.status_code", "type": "int64", "value": 200},
+            {"key": "user_agent.original", "type": "string", "value": "perch-astronomy-smoke/run-test-marker"}
+          ],
+          "processID": "p2"
+        },
+        {
+          "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "spanID": "3333333333333333",
+          "operationName": "oteldemo.RecommendationService/ListRecommendations",
+          "references": [
+            {"refType": "CHILD_OF", "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "spanID": "2222222222222222"}
+          ],
+          "startTime": 1700000001001000,
+          "duration": 8000,
+          "tags": [
+            {"key": "rpc.system", "type": "string", "value": "grpc"},
+            {"key": "rpc.service", "type": "string", "value": "oteldemo.RecommendationService"},
+            {"key": "rpc.method", "type": "string", "value": "ListRecommendations"}
+          ],
+          "processID": "p2"
+        },
+        {
+          "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "spanID": "4444444444444444",
+          "operationName": "oteldemo.RecommendationService/ListRecommendations",
+          "references": [
+            {"refType": "CHILD_OF", "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "spanID": "3333333333333333"}
+          ],
+          "startTime": 1700000001001200,
+          "duration": 7000,
+          "tags": [
+            {"key": "rpc.system", "type": "string", "value": "grpc"},
+            {"key": "demo.product.recommended.count", "type": "int64", "value": 5}
+          ],
+          "processID": "p3"
+        },
+        {
+          "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "spanID": "5555555555555555",
+          "operationName": "oteldemo.ProductCatalogService/ListProducts",
+          "references": [
+            {"refType": "CHILD_OF", "traceID": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "spanID": "4444444444444444"}
+          ],
+          "startTime": 1700000001001400,
+          "duration": 5000,
+          "tags": [
+            {"key": "rpc.system", "type": "string", "value": "grpc"},
+            {"key": "rpc.service", "type": "string", "value": "oteldemo.ProductCatalogService"}
+          ],
+          "processID": "p4"
+        }
+      ],
+      "processes": {
+        "p1": {"serviceName": "frontend-proxy", "tags": []},
+        "p2": {"serviceName": "frontend", "tags": []},
+        "p3": {"serviceName": "recommendation", "tags": []},
+        "p4": {"serviceName": "product-catalog", "tags": []}
+      },
+      "warnings": null
+    }
+  ],
+  "total": 0,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

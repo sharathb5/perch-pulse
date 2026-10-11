@@ -1,0 +1,44 @@
+{
+  "_comment": "SYNTHETIC Jaeger traces response: valid multi-service shape but outside probe window",
+  "data": [
+    {
+      "traceID": "dddddddddddddddddddddddddddddddd",
+      "spans": [
+        {
+          "traceID": "dddddddddddddddddddddddddddddddd",
+          "spanID": "aaaaaaaaaaaaaaaa",
+          "operationName": "GET",
+          "references": [],
+          "startTime": 1600000001000000,
+          "duration": 5000,
+          "tags": [
+            {"key": "http.url", "type": "string", "value": "http://127.0.0.1:8080/api/recommendations?productIds=OLJCESPC7Z"},
+            {"key": "user_agent", "type": "string", "value": "perch-astronomy-smoke/run-test-marker"}
+          ],
+          "processID": "p1"
+        },
+        {
+          "traceID": "dddddddddddddddddddddddddddddddd",
+          "spanID": "bbbbbbbbbbbbbbbb",
+          "operationName": "oteldemo.RecommendationService/ListRecommendations",
+          "references": [
+            {"refType": "CHILD_OF", "traceID": "dddddddddddddddddddddddddddddddd", "spanID": "aaaaaaaaaaaaaaaa"}
+          ],
+          "startTime": 1600000001001000,
+          "duration": 2000,
+          "tags": [],
+          "processID": "p2"
+        }
+      ],
+      "processes": {
+        "p1": {"serviceName": "frontend", "tags": []},
+        "p2": {"serviceName": "recommendation", "tags": []}
+      },
+      "warnings": null
+    }
+  ],
+  "total": 0,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

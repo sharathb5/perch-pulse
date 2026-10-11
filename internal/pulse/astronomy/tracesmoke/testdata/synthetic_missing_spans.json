@@ -1,0 +1,17 @@
+{
+  "_comment": "SYNTHETIC Jaeger traces response: processes present but spans empty",
+  "data": [
+    {
+      "traceID": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "spans": [],
+      "processes": {
+        "p1": {"serviceName": "frontend", "tags": []}
+      },
+      "warnings": null
+    }
+  ],
+  "total": 0,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

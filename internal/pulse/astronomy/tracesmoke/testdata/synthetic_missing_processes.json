@@ -1,0 +1,29 @@
+{
+  "_comment": "SYNTHETIC Jaeger traces response: spans present but process map empty",
+  "data": [
+    {
+      "traceID": "ffffffffffffffffffffffffffffffff",
+      "spans": [
+        {
+          "traceID": "ffffffffffffffffffffffffffffffff",
+          "spanID": "aaaaaaaaaaaaaaaa",
+          "operationName": "GET",
+          "references": [],
+          "startTime": 1700000001000000,
+          "duration": 1000,
+          "tags": [
+            {"key": "http.url", "type": "string", "value": "http://127.0.0.1:8080/api/recommendations?productIds=OLJCESPC7Z"},
+            {"key": "user_agent", "type": "string", "value": "perch-astronomy-smoke/run-test-marker"}
+          ],
+          "processID": "p1"
+        }
+      ],
+      "processes": {},
+      "warnings": null
+    }
+  ],
+  "total": 0,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

@@ -60,10 +60,15 @@ func TestAstronomySmokeWorkflow_DispatchOnly(t *testing.T) {
 		"ci-smoke.sh",
 		"ASTRONOMY_DEMO_PIN",
 		"timeout-minutes: 45",
+		"ASTRONOMY_TRACE_DEADLINE_SECS",
+		"if-no-files-found: ignore",
 	} {
 		if !strings.Contains(s, needle) {
 			t.Errorf("astronomy-smoke.yml should reference %q", needle)
 		}
+	}
+	if strings.Contains(s, "continue-on-error: true") {
+		t.Fatal("astronomy-smoke must not mask failures with continue-on-error")
 	}
 }
 
