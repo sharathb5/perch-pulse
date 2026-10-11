@@ -21,6 +21,8 @@ export const fixtures = {
   pulseIncidentsHistorical: loadFixture('pulse.incidents.historical.json'),
   pulseIncidentsOpen: loadFixture('pulse.incidents.open.json'),
   pulseIncidentDetail: loadFixture('pulse.incident.detail.json'),
+  pulseChanges: loadFixture('pulse.changes.json'),
+  pulseChangesEmpty: loadFixture('pulse.changes.empty.json'),
 }
 
 /**
@@ -33,6 +35,7 @@ export const fixtures = {
  *   pulseServices?: object,
  *   pulseIncidents?: object,
  *   pulseIncidentDetail?: object,
+ *   pulseChanges?: object,
  *   pulseStatus?: number,
  * }} opts
  */
@@ -51,6 +54,12 @@ export async function mockApis(page, opts = {}) {
         ? fixtures.pulseIncidentsOpen
         : loadEmptyIncidents())
   const pulseDetail = opts.pulseIncidentDetail ?? fixtures.pulseIncidentDetail
+  const pulseChangesResolved =
+    opts.pulseChanges ??
+    (opts.pulseServices === fixtures.pulseServicesHistorical ||
+    opts.pulseServices === fixtures.pulseServicesOpen
+      ? fixtures.pulseChanges
+      : fixtures.pulseChangesEmpty)
   const pulseStatus = opts.pulseStatus ?? 200
 
   await page.route('**/api/graph**', async (route) => {
@@ -102,6 +111,37 @@ export async function mockApis(page, opts = {}) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(pulseServices),
+    })
+  })
+
+  await page.route('**/api/pulse/changes**', async (route) => {
+    if (pulseStatus >= 400) {
+      await route.fulfill({
+        status: pulseStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'pulse.api.error.v1',
+          error: 'pulse changes unavailable',
+          code: 'unavailable',
+        }),
+      })
+      return
+    }
+    const path = new URL(route.request().url()).pathname
+    const isDetail = /\/api\/pulse\/changes\/.+/.test(path)
+    const body = isDetail
+      ? {
+          schema_version: 'pulse.api.change.v1',
+          generated_at: '2026-10-10T12:00:00Z',
+          data_sources: pulseChangesResolved.data_sources,
+          change: pulseChangesResolved.changes?.[0] ?? null,
+          graph_nodes: ['api'],
+        }
+      : pulseChangesResolved
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
     })
   })
 

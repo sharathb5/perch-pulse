@@ -7,7 +7,9 @@
     "changes": "file_store",
     "correlation": "on_read"
   },
-  "limitations": [],
+  "limitations": [
+    "Persisted snapshot; observations unavailable in viz process."
+  ],
   "incident": {
     "schema_version": "pulse.incident.v1",
     "incident_id": "inc|fixture/production/api|20261010T050000.000000000Z",
@@ -18,17 +20,187 @@
     "first_detected_at": "2026-10-10T05:00:00Z",
     "last_observed_at": "2026-10-10T05:10:00Z",
     "recovered_at": "2026-10-10T05:10:00Z",
-    "affected_service_ids": ["fixture/production/api"],
-    "before": { "phase": "before", "window": { "start": "2026-10-10T04:50:00Z", "end": "2026-10-10T05:00:00Z" }, "available": true },
-    "during": { "phase": "during", "window": { "start": "2026-10-10T05:00:00Z", "end": "2026-10-10T05:10:00Z" }, "available": true },
-    "after": { "phase": "after", "window": { "start": "2026-10-10T05:10:00Z", "end": "2026-10-10T05:20:00Z" }, "available": true },
-    "observations": ["Latency elevated during window."],
-    "inferences": ["Possible regression on api (not proven causation)."],
-    "limitations": ["Persisted snapshot; observations unavailable in viz process."],
+    "affected_service_ids": ["fixture/production/api", "fixture/production/web"],
+    "before": {
+      "phase": "before",
+      "window": { "start": "2026-10-10T04:50:00Z", "end": "2026-10-10T05:00:00Z" },
+      "digests": [
+        {
+          "signal": "latency_ms",
+          "count": 8,
+          "median": 42.5,
+          "min": 40,
+          "max": 55,
+          "first_at": "2026-10-10T04:50:30Z",
+          "last_at": "2026-10-10T04:59:30Z"
+        },
+        {
+          "signal": "error_rate",
+          "count": 8,
+          "median": 0,
+          "min": 0,
+          "max": 0.01,
+          "first_at": "2026-10-10T04:50:30Z",
+          "last_at": "2026-10-10T04:59:30Z"
+        },
+        {
+          "signal": "call_rate",
+          "count": 8,
+          "median": 1.25,
+          "min": 1.0,
+          "max": 1.5,
+          "first_at": "2026-10-10T04:50:30Z",
+          "last_at": "2026-10-10T04:59:30Z"
+        }
+      ],
+      "available": true
+    },
+    "during": {
+      "phase": "during",
+      "window": { "start": "2026-10-10T05:00:00Z", "end": "2026-10-10T05:10:00Z" },
+      "digests": [
+        {
+          "signal": "latency_ms",
+          "count": 6,
+          "median": 820,
+          "min": 400,
+          "max": 900,
+          "first_at": "2026-10-10T05:00:00Z",
+          "last_at": "2026-10-10T05:09:00Z"
+        },
+        {
+          "signal": "error_rate",
+          "count": 6,
+          "median": 0.02,
+          "min": 0,
+          "max": 0.05,
+          "first_at": "2026-10-10T05:00:00Z",
+          "last_at": "2026-10-10T05:09:00Z"
+        },
+        {
+          "signal": "call_rate",
+          "count": 6,
+          "median": 0.4,
+          "min": 0.2,
+          "max": 0.8,
+          "first_at": "2026-10-10T05:00:00Z",
+          "last_at": "2026-10-10T05:09:00Z"
+        }
+      ],
+      "available": true
+    },
+    "after": {
+      "phase": "after",
+      "window": { "start": "2026-10-10T05:10:00Z", "end": "2026-10-10T05:20:00Z" },
+      "digests": [
+        {
+          "signal": "latency_ms",
+          "count": 5,
+          "median": 48,
+          "min": 45,
+          "max": 60,
+          "first_at": "2026-10-10T05:10:30Z",
+          "last_at": "2026-10-10T05:19:00Z"
+        },
+        {
+          "signal": "call_rate",
+          "count": 5,
+          "median": 1.1,
+          "min": 0.9,
+          "max": 1.3,
+          "first_at": "2026-10-10T05:10:30Z",
+          "last_at": "2026-10-10T05:19:00Z"
+        }
+      ],
+      "available": true
+    },
+    "observations": [
+      "Latency elevated during window.",
+      "Detector signals: latency_ms, call_rate",
+      "Recovery timestamp recorded at 2026-10-10T05:10:00Z"
+    ],
+    "inferences": [
+      "Possible regression on api (not proven causation).",
+      "After-window medians improved relative to during — not proof performance fully recovered."
+    ],
+    "limitations": [
+      "Persisted snapshot; observations unavailable in viz process.",
+      "before/during/after digests are summaries, not full telemetry dumps",
+      "correlation with changes does not prove causation"
+    ],
+    "evidence": [
+      {
+        "ref": "finding:fixture/production/api|latency_ms|20261010T050000.000000000Z",
+        "summary": "observed latency degradation (correlated change, not proven causation)"
+      }
+    ],
     "summary": "fixture/production/api degradation detected via latency_ms (evidence snapshot; not proven causation)"
   },
   "correlation": {
     "schema_version": "pulse.correlation.v1",
+    "scorer_version": "temporal-service-overlap-v1",
+    "incident_id": "inc|fixture/production/api|20261010T050000.000000000Z",
+    "generated_at": "2026-10-10T12:00:00Z",
+    "candidates": [
+      {
+        "schema_version": "pulse.correlation.v1",
+        "correlation_id": "corr|inc|fixture/production/api|20261010T050000.000000000Z|deployment|sim-fixture-api-1001|20261010T045500.000000000Z|1",
+        "scorer_version": "temporal-service-overlap-v1",
+        "incident_id": "inc|fixture/production/api|20261010T050000.000000000Z",
+        "change_id": "deployment|sim-fixture-api-1001|20261010T045500.000000000Z",
+        "rank": 1,
+        "score": 72.5,
+        "temporal_distance_secs": 300,
+        "service_overlap": "primary",
+        "environment_match": true,
+        "observations": [
+          "Change observed 300s before first detection",
+          "Change service_ids include incident primary service"
+        ],
+        "inferences": [
+          "Temporal and service overlap suggest a candidate relationship (not proven causation)"
+        ],
+        "limitations": [
+          "Score is explainable points, not a probability",
+          "Simulated deployment markers are not real cloud deploys"
+        ],
+        "score_breakdown": {
+          "temporal_points": 30,
+          "primary_points": 35,
+          "topology_points": 0,
+          "environment_points": 7.5,
+          "excluded": false
+        }
+      }
+    ],
+    "top1": {
+      "schema_version": "pulse.correlation.v1",
+      "correlation_id": "corr|inc|fixture/production/api|20261010T050000.000000000Z|deployment|sim-fixture-api-1001|20261010T045500.000000000Z|1",
+      "scorer_version": "temporal-service-overlap-v1",
+      "incident_id": "inc|fixture/production/api|20261010T050000.000000000Z",
+      "change_id": "deployment|sim-fixture-api-1001|20261010T045500.000000000Z",
+      "rank": 1,
+      "score": 72.5,
+      "temporal_distance_secs": 300,
+      "service_overlap": "primary",
+      "environment_match": true,
+      "observations": ["Change observed 300s before first detection"],
+      "inferences": ["Candidate relationship only (not proven causation)"],
+      "limitations": ["Score is not a probability"],
+      "score_breakdown": {
+        "temporal_points": 30,
+        "primary_points": 35,
+        "topology_points": 0,
+        "environment_points": 7.5,
+        "excluded": false
+      }
+    },
+    "top3": [],
+    "strong_candidate": true,
+    "no_strong_candidate": false,
+    "observations": ["1 change candidate ranked by temporal/service overlap"],
+    "inferences": ["Top candidate is correlated, not proven causation"],
+    "limitations": ["Correlation is not causation."],
     "note": "Correlation is not causation."
   },
   "graph_node": "api"

@@ -6,8 +6,24 @@ const envOptions = [
   { value: 'dev', label: 'dev' },
 ]
 
-/** @param {{ stackName: string, environment: string, onEnvironmentChange: (v: string) => void, onRefresh?: () => void }} props */
-export function Navbar({ stackName, environment, onEnvironmentChange, onRefresh }) {
+/**
+ * @param {{
+ *   stackName: string,
+ *   environment: string,
+ *   onEnvironmentChange: (v: string) => void,
+ *   onRefresh?: () => void,
+ *   onOpenPulse?: () => void,
+ *   pulseOpen?: boolean,
+ * }} props
+ */
+export function Navbar({
+  stackName,
+  environment,
+  onEnvironmentChange,
+  onRefresh,
+  onOpenPulse,
+  pulseOpen = false,
+}) {
   return (
     <header
       data-testid="perch-navbar"
@@ -23,6 +39,19 @@ export function Navbar({ stackName, environment, onEnvironmentChange, onRefresh 
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          data-testid="pulse-open"
+          onClick={() => onOpenPulse?.()}
+          aria-pressed={pulseOpen}
+          className={`rounded-md border px-2 py-1 text-xs ${
+            pulseOpen
+              ? 'border-gray-400 bg-gray-100 text-gray-900'
+              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Pulse
+        </button>
         <label htmlFor="env-select" className="sr-only">
           Environment
         </label>

@@ -457,6 +457,7 @@ function ProviderLogsAIActions({ node, environment, logsResult }) {
  *   pulseStaleSnapshot?: boolean,
  *   pulseLastSuccessAt?: string | null,
  *   graphDemo?: boolean,
+ *   escapeDisabled?: boolean,
  * }} props
  */
 export function DetailPanel({
@@ -468,6 +469,7 @@ export function DetailPanel({
   pulseStaleSnapshot = false,
   pulseLastSuccessAt = null,
   graphDemo = false,
+  escapeDisabled = false,
 }) {
   const { stackName, nodeId } = useParams()
   const navigate = useNavigate()
@@ -485,12 +487,15 @@ export function DetailPanel({
   }
 
   useEffect(() => {
+    if (escapeDisabled) {
+      return undefined
+    }
     const onKey = (e) => {
       if (e.key === 'Escape') navigate(`/stack/${stackName}`)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [navigate, stackName])
+  }, [navigate, stackName, escapeDisabled])
 
   useEffect(() => {
     // Reset ephemeral copy feedback when the selected node or tab changes.

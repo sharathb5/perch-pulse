@@ -1,0 +1,58 @@
+{
+  "schema_version": "pulse.api.changes.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "data_sources": {
+    "observations": "process_memory_unavailable",
+    "incidents": "file_store",
+    "changes": "file_store"
+  },
+  "limitations": [],
+  "count": 2,
+  "limit": 50,
+  "changes": [
+    {
+      "schema_version": "pulse.change.v1",
+      "change_id": "deployment|sim-fixture-api-1001|20261010T045500.000000000Z",
+      "change_type": "deployment",
+      "source": "change-eval-harness",
+      "commit_sha": "sim-fixture-api-1001",
+      "environment": "production",
+      "service_ids": ["fixture/production/api"],
+      "service_mapping": "explicit",
+      "title": "Simulated deploy before fixture api regression",
+      "summary": "Simulated deployment marker for correlation demo (not a real deploy)",
+      "created_at": "2026-10-10T04:55:00Z",
+      "deployed_at": "2026-10-10T04:55:00Z",
+      "observed_at": "2026-10-10T04:55:00Z",
+      "metadata": { "simulated": "true" },
+      "evidence": [
+        {
+          "ref": "demo:simulated-deploy-marker",
+          "summary": "Synthetic deployment marker for demo/eval; not a real cloud deploy"
+        }
+      ]
+    },
+    {
+      "schema_version": "pulse.change.v1",
+      "change_id": "deployment|sim-fixture-web-1002|20261010T035500.000000000Z",
+      "change_type": "deployment",
+      "source": "change-eval-harness",
+      "commit_sha": "sim-fixture-web-1002",
+      "environment": "production",
+      "service_ids": ["fixture/production/web"],
+      "service_mapping": "explicit",
+      "title": "Simulated deploy before fixture web regression",
+      "summary": "Simulated deployment marker for correlation demo (not a real deploy)",
+      "created_at": "2026-10-10T03:55:00Z",
+      "deployed_at": "2026-10-10T03:55:00Z",
+      "observed_at": "2026-10-10T03:55:00Z",
+      "metadata": { "simulated": "true" },
+      "evidence": [
+        {
+          "ref": "demo:simulated-deploy-marker",
+          "summary": "Synthetic deployment marker for demo/eval; not a real cloud deploy"
+        }
+      ]
+    }
+  ]
+}

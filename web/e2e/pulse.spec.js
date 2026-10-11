@@ -140,9 +140,23 @@ test.describe('Pulse intelligence on service graph (Milestone B)', () => {
     })
     await page.goto('/stack/fixture-stack/api')
     await expect(page.getByTestId('pulse-section')).toBeVisible()
+    await expect(page.getByTestId('pulse-sidebar')).toHaveCount(0)
     await page.keyboard.press('Escape')
     await expect(page).toHaveURL(/\/stack\/fixture-stack$/)
     await expect(page.getByTestId('detail-panel')).toHaveCount(0)
+  })
+
+  test('selecting a Pulse incident opens the sidebar investigation', async ({ page }) => {
+    await mockApis(page, {
+      pulseServices: fixtures.pulseServicesHistorical,
+      pulseIncidents: fixtures.pulseIncidentsHistorical,
+      pulseChanges: fixtures.pulseChanges,
+    })
+    await page.goto('/stack/fixture-stack/api')
+    await page.getByTestId('pulse-incident-list').locator('button').first().click()
+    await expect(page.getByTestId('pulse-sidebar')).toBeVisible()
+    await expect(page.getByTestId('pulse-investigation')).toBeVisible()
+    await expect(page).toHaveURL(/pulse=incidents/)
   })
 
   test('screenshot — selected node with Pulse historical info', async ({ page }) => {

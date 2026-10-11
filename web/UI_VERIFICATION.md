@@ -52,7 +52,7 @@ Fixtures live in `web/fixtures/`:
 | `graph.ok.json` / `status.ok.json` | Happy-path topology |
 | `graph.empty.json` / `status.empty.json` | Empty graph |
 | `status.stale-unknown.json` | Nodes without matching health → `unknown` |
-| `pulse.services.*.json` / `pulse.incidents.*.json` | Pulse intelligence overlays (Milestone B) |
+| `pulse.services.*.json` / `pulse.incidents.*.json` / `pulse.changes*.json` | Pulse overlays + sidebar (Milestones B/C) |
 
 E2E tests intercept `/api/graph`, `/api/status`, and `/api/pulse/*` (and optionally fail them). Default Pulse mock is empty so legacy screenshot baselines stay stable. They never call Astronomy Shop, Databricks, or production credentials.
 
@@ -71,6 +71,12 @@ E2E tests intercept `/api/graph`, `/api/status`, and `/api/pulse/*` (and optiona
 | `pulse-selected-historical` | 1280×720 | Detail Pulse section for recovered incidents |
 | `pulse-unavailable` | 1280×720 | Unavailable Pulse intelligence |
 | `pulse-api-error` | 1280×720 | Pulse API failure (graph intact) |
+| `pulse-sidebar-overview` | 1280×720 | Pulse sidebar Overview tab |
+| `pulse-sidebar-incidents` | 1280×720 | Pulse sidebar incident list |
+| `pulse-sidebar-investigation` | 1280×720 | Incident digests + correlation |
+| `pulse-sidebar-changes` | 1280×720 | Changes tab (simulated markers) |
+| `pulse-sidebar-unavailable` | 1280×720 | Sidebar with unavailable observations |
+| `pulse-sidebar-narrow` | 900×800 | Sidebar + detail at narrow desktop |
 
 ### Regenerating baselines
 
