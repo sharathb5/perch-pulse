@@ -30,8 +30,9 @@ export PERCH_ASTRONOMY_DEMO_DIR=/path/to/opentelemetry-demo
 | `scripts/start.sh` | `make start-minimal` (shop + observability) |
 | `scripts/stop.sh` | Compose `down` without `--volumes` (safer than upstream `make stop`) |
 | `scripts/verify-live.sh` | Frontend + container + optional Jaeger checks |
-| `scripts/ci-smoke.sh` | GHA live smoke wrapper (includes multi-service trace probe) |
+| `scripts/ci-smoke.sh` | GHA live smoke wrapper (trace-smoke + Run Pulse HTTP API) |
 | `cmd/trace-smoke` | Bounded recommendations-browse → Jaeger same-trace qualifier |
+| `cmd/run-pulse-api-smoke` | Real `POST/GET /api/pulse/runs` against viz with Run Pulse enabled |
 | `perch.yaml` | Optional Perch graph for localhost / Docker health |
 
 ## Run Pulse (Perch UI)

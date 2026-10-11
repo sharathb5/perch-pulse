@@ -28,6 +28,27 @@ Rules:
 
 ---
 
+## ADR-021: Astronomy smoke exercises real Run Pulse HTTP API
+
+**Date:** 2026-10-11  
+**Status:** Accepted  
+**Issue:** #25 (parent #17)
+
+**Context:** After Milestone E (#32), Astronomy Smoke still proved Jaeger multi-service qualification via `cmd/trace-smoke` but never called `POST /api/pulse/runs` / `GET /api/pulse/runs/{id}` on a real `perch viz` process. That left a gap between library-level evidence and the user-facing HTTP API.
+
+**Decision:**
+1. Keep the existing smoke stack (one Astronomy Shop, one viz) and prior stages (graph/status, storefront GET, `cmd/trace-smoke`).
+2. Start viz with supported env `PERCH_RUN_PULSE_DEMO_BASE_URL` (+ optional Jaeger base) — no security bypasses.
+3. Add `examples/astronomy-shop/cmd/run-pulse-api-smoke` which issues real HTTP create/poll against viz; assertions live in `internal/pulse/runpulse/apismoke` (fixture-tested).
+4. Fail on unavailable workflow, non-202 create, terminal `failed`/`timed_out`, poll deadline, or incomplete evidence (mapped services, marker-linked trace, cross-service edge). HTTP 200 alone is never success.
+5. Document why both probes run: trace-smoke = library/Jaeger gate; Run Pulse API = mounted HTTP path. Remain `workflow_dispatch` only.
+
+**Consequences:** Live smoke duration grows by one bounded diagnostic (~engine 90s + poll). Deterministic `apismoke` tests stay in `make verify`. No PR-required live Docker.
+
+**Alternatives considered:** Replacing trace-smoke with API-only (rejected: lose independent library gate); calling `runpulse.Engine` from the smoke binary (rejected: does not prove HTTP); weakening loopback/Origin checks for CI (rejected).
+
+---
+
 ## ADR-020: Run Pulse on-demand diagnostics (Milestone E)
 
 **Date:** 2026-10-11  

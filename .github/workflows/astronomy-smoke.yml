@@ -39,6 +39,10 @@ jobs:
       ASTRONOMY_TRACE_MAX_REQUESTS: '5'
       ASTRONOMY_TRACE_REQUEST_TIMEOUT_SECS: '15'
       ASTRONOMY_TRACE_PRODUCT_ID: 'OLJCESPC7Z'
+      # Run Pulse HTTP API stage (POST/GET /api/pulse/runs against real viz).
+      ASTRONOMY_RUN_PULSE_DEADLINE_SECS: '120'
+      ASTRONOMY_RUN_PULSE_POLL_SECS: '2'
+      ASTRONOMY_RUN_PULSE_MAX_ATTEMPTS: '60'
     steps:
       - uses: actions/checkout@v4
 

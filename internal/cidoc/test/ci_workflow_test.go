@@ -61,6 +61,7 @@ func TestAstronomySmokeWorkflow_DispatchOnly(t *testing.T) {
 		"ASTRONOMY_DEMO_PIN",
 		"timeout-minutes: 45",
 		"ASTRONOMY_TRACE_DEADLINE_SECS",
+		"ASTRONOMY_RUN_PULSE_DEADLINE_SECS",
 		"if-no-files-found: ignore",
 	} {
 		if !strings.Contains(s, needle) {
