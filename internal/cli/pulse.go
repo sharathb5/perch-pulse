@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	pulseapi "github.com/yashg4509/perch/internal/pulse/api"
 	"github.com/yashg4509/perch/internal/pulse/change"
 	"github.com/yashg4509/perch/internal/pulse/correlate"
 	"github.com/yashg4509/perch/internal/pulse/incident"
@@ -182,7 +183,7 @@ func newPulseChangeGetCmd() *cobra.Command {
 			}
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
-			return enc.Encode(ev)
+			return enc.Encode(pulseapi.RedactChange(ev))
 		},
 	}
 }
@@ -200,6 +201,9 @@ func newPulseIncidentsCmd() *cobra.Command {
 			list, err := incident.NewFileStore(dir).List()
 			if err != nil {
 				return err
+			}
+			for i := range list {
+				list[i] = pulseapi.RedactIncident(list[i])
 			}
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
@@ -234,6 +238,7 @@ func runPulseIncidentGet(cmd *cobra.Command, args []string) error {
 	if !ok {
 		return fmt.Errorf("pulse: incident %q not found", args[0])
 	}
+	inc = pulseapi.RedactIncident(inc)
 	if !withChanges && !forAgent {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
@@ -243,6 +248,9 @@ func runPulseIncidentGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	for i := range changes {
+		changes[i] = pulseapi.RedactChange(changes[i])
+	}
 	rep, err := correlate.Correlate(inc, changes, correlate.DefaultConfig())
 	if err != nil {
 		return err
@@ -250,7 +258,8 @@ func runPulseIncidentGet(cmd *cobra.Command, args []string) error {
 	var top *change.Event
 	if rep.Top1 != nil {
 		if ev, ok, _ := change.NewFileStore(dir).Get(rep.Top1.ChangeID); ok {
-			top = &ev
+			redacted := pulseapi.RedactChange(ev)
+			top = &redacted
 		}
 	}
 	if forAgent {
@@ -310,6 +319,10 @@ func runPulseContext(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	inc = pulseapi.RedactIncident(inc)
+	for i := range changes {
+		changes[i] = pulseapi.RedactChange(changes[i])
+	}
 	rep, err := correlate.Correlate(inc, changes, correlate.DefaultConfig())
 	if err != nil {
 		return err
@@ -317,7 +330,8 @@ func runPulseContext(cmd *cobra.Command, args []string) error {
 	var top *change.Event
 	if rep.Top1 != nil {
 		if ev, ok, _ := change.NewFileStore(dir).Get(rep.Top1.ChangeID); ok {
-			top = &ev
+			redacted := pulseapi.RedactChange(ev)
+			top = &redacted
 		}
 	}
 	_, err = fmt.Fprint(cmd.OutOrStdout(), correlate.FormatAgentContext(inc, rep, top))

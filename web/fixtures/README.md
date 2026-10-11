@@ -8,6 +8,13 @@ JSON payloads shaped like live viz APIs for Vitest and Playwright.
 | `pulse.services.*.json` | `/api/pulse/services` |
 | `pulse.incidents.*.json` / `pulse.incident.detail.json` | `/api/pulse/incidents` |
 | `pulse.changes*.json` | `/api/pulse/changes` |
+| `pulse.pipeline.contract.json` | Golden envelope from Go INTEGRATION pipeline (`internal/pulse/pipeline`) |
+
+Regenerate pipeline contract (from repo root):
+
+```bash
+go test ./internal/pulse/pipeline/test -count=1 -update-pipeline-fixture
+```
 
 - No live network, Astronomy Shop Docker, Databricks, or credentials.
 - Pulse fixtures use explicit `graph_node` joins (`api` / `web` / `db`) — not display-name heuristics.

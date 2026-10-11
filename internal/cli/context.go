@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yashg4509/perch/internal/config"
 	"github.com/yashg4509/perch/internal/graph"
+	pulseapi "github.com/yashg4509/perch/internal/pulse/api"
 	"github.com/yashg4509/perch/internal/pulse/change"
 	"github.com/yashg4509/perch/internal/pulse/correlate"
 	"github.com/yashg4509/perch/internal/pulse/incident"
@@ -129,10 +130,13 @@ func appendPulseAgentContext(w io.Writer) error {
 	if err != nil || len(incs) == 0 {
 		return nil
 	}
-	inc := incs[len(incs)-1]
+	inc := pulseapi.RedactIncident(incs[len(incs)-1])
 	changes, err := change.NewFileStore(dir).List()
 	if err != nil {
 		return nil
+	}
+	for i := range changes {
+		changes[i] = pulseapi.RedactChange(changes[i])
 	}
 	rep, err := correlate.Correlate(inc, changes, correlate.DefaultConfig())
 	if err != nil {
@@ -141,7 +145,8 @@ func appendPulseAgentContext(w io.Writer) error {
 	var top *change.Event
 	if rep.Top1 != nil {
 		if ev, ok, _ := change.NewFileStore(dir).Get(rep.Top1.ChangeID); ok {
-			top = &ev
+			redacted := pulseapi.RedactChange(ev)
+			top = &redacted
 		}
 	}
 	_, err = fmt.Fprint(w, "\n"+correlate.FormatAgentContext(inc, rep, top))

@@ -1,0 +1,89 @@
+# LIVE SMOKE — optional Astronomy Shop stack on a GitHub-hosted runner.
+# workflow_dispatch only. NOT a required PR check. No schedule until stability
+# and cost are measured (Milestone C.5 / issue #26).
+name: Astronomy Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type run to start the isolated Astronomy Shop smoke (expensive)'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: astronomy-smoke-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Live Astronomy Shop
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: github.event.inputs.confirm == 'run'
+    env:
+      GOTOOLCHAIN: auto
+      ASTRONOMY_DEMO_PIN: '3.1.0'
+      ASTRONOMY_MODE: minimal
+      ASTRONOMY_VERIFY_WAIT_SECS: '300'
+      ASTRONOMY_SMOKE_DEADLINE_SECS: '2400'
+      ASTRONOMY_MIN_DISK_KB: '8388608'
+      ASTRONOMY_MIN_MEM_KB: '3145728'
+      ASTRONOMY_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/examples/astronomy-shop/.smoke-artifacts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Preflight runner resources
+        run: |
+          set -euo pipefail
+          df -h /
+          free -m || true
+          docker version
+          avail_kb="$(df -k / | awk 'NR==2{print $4}')"
+          mem_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
+          echo "disk_avail_kb=$avail_kb mem_available_kb=$mem_kb"
+          if [[ "$avail_kb" -lt "$ASTRONOMY_MIN_DISK_KB" ]]; then
+            echo "::error::Insufficient disk for Astronomy Shop (avail_kb=$avail_kb). Do not claim success; larger runners need approval."
+            exit 1
+          fi
+          if [[ "$mem_kb" -lt "$ASTRONOMY_MIN_MEM_KB" ]]; then
+            echo "::error::Insufficient MemAvailable (mem_kb=$mem_kb). Smoke unavailable on this runner class."
+            exit 1
+          fi
+
+      - name: Build perch (embed UI required by //go:embed)
+        run: |
+          mkdir -p examples/astronomy-shop/.smoke-artifacts
+          make web-deps web-build-embed
+          go build -o examples/astronomy-shop/.smoke-artifacts/perch ./cmd/perch
+
+      - name: Run isolated smoke
+        run: |
+          mkdir -p examples/astronomy-shop/.smoke-artifacts
+          chmod +x examples/astronomy-shop/scripts/ci-smoke.sh
+          export PERCH_BIN="${{ github.workspace }}/examples/astronomy-shop/.smoke-artifacts/perch"
+          ./examples/astronomy-shop/scripts/ci-smoke.sh
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astronomy-smoke-${{ github.run_id }}
+          path: examples/astronomy-shop/.smoke-artifacts
+          if-no-files-found: ignore
+          retention-days: 7

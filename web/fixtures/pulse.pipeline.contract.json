@@ -1,0 +1,485 @@
+{
+  "changes": {
+    "schema_version": "pulse.api.changes.v1",
+    "generated_at": "2026-10-10T13:02:25Z",
+    "data_sources": {
+      "observations": "process_memory_unavailable",
+      "incidents": "file_store",
+      "changes": "file_store"
+    },
+    "limitations": [
+      "Change list is a persisted snapshot under the Pulse data directory."
+    ],
+    "count": 1,
+    "limit": 50,
+    "changes": [
+      {
+        "schema_version": "pulse.change.v1",
+        "change_id": "deployment|astronomy/local/shipping|20261011T035434.929526000Z",
+        "change_type": "deployment",
+        "source": "pipeline-test",
+        "environment": "local",
+        "service_ids": [
+          "astronomy/local/shipping"
+        ],
+        "service_mapping": "explicit",
+        "title": "simulated shipping deploy",
+        "summary": "demo marker",
+        "created_at": "2026-10-11T03:54:34.929526Z",
+        "deployed_at": "2026-10-10T12:59:25Z",
+        "observed_at": "2026-10-11T03:54:34.929526Z",
+        "metadata": {
+          "harness": "pipeline-contract",
+          "simulated": "true"
+        },
+        "evidence": [
+          {
+            "ref": "demo:simulated-deploy-marker",
+            "summary": "Synthetic deployment marker for demo/eval; not a real cloud deploy"
+          }
+        ]
+      }
+    ]
+  },
+  "incident": {
+    "schema_version": "pulse.api.incident.v1",
+    "generated_at": "2026-10-10T13:02:25Z",
+    "data_sources": {
+      "observations": "process_memory_unavailable",
+      "incidents": "file_store",
+      "changes": "file_store",
+      "correlation": "on_read"
+    },
+    "limitations": [
+      "Correlation ranks temporal/service overlap; it is not proven causation.",
+      "Incident detail is a persisted snapshot; not a continuous live stream."
+    ],
+    "incident": {
+      "schema_version": "pulse.incident.v1",
+      "incident_id": "inc|astronomy/local/shipping|20261010T130225.000000000Z",
+      "primary_service_id": "astronomy/local/shipping",
+      "environment": "local",
+      "finding_ids": [
+        "astronomy/local/shipping|latency_ms|20261010T130225.000000000Z"
+      ],
+      "signal_types": [
+        "latency_ms"
+      ],
+      "first_detected_at": "2026-10-10T13:02:25Z",
+      "last_observed_at": "2026-10-10T13:02:25Z",
+      "affected_service_ids": [
+        "astronomy/local/shipping"
+      ],
+      "before": {
+        "phase": "before",
+        "window": {
+          "start": "2026-10-10T13:00:00Z",
+          "end": "2026-10-10T13:01:59.999Z"
+        },
+        "digests": [
+          {
+            "signal": "call_rate",
+            "count": 6,
+            "median": 0.5,
+            "min": 0.5,
+            "max": 0.5,
+            "first_at": "2026-10-10T13:00:00Z",
+            "last_at": "2026-10-10T13:01:40Z"
+          },
+          {
+            "signal": "latency_ms",
+            "count": 6,
+            "median": 200,
+            "min": 200,
+            "max": 200,
+            "first_at": "2026-10-10T13:00:00Z",
+            "last_at": "2026-10-10T13:01:40Z"
+          }
+        ],
+        "available": true
+      },
+      "during": {
+        "phase": "during",
+        "window": {
+          "start": "2026-10-10T13:02:00Z",
+          "end": "2026-10-10T13:02:20Z"
+        },
+        "digests": [
+          {
+            "signal": "call_rate",
+            "count": 3,
+            "median": 0.5,
+            "min": 0.5,
+            "max": 0.5,
+            "first_at": "2026-10-10T13:02:00Z",
+            "last_at": "2026-10-10T13:02:20Z"
+          },
+          {
+            "signal": "latency_ms",
+            "count": 3,
+            "median": 5000,
+            "min": 5000,
+            "max": 5000,
+            "first_at": "2026-10-10T13:02:00Z",
+            "last_at": "2026-10-10T13:02:20Z"
+          }
+        ],
+        "available": true
+      },
+      "after": {
+        "phase": "after",
+        "window": {
+          "start": "2026-10-10T13:02:25Z",
+          "end": "2026-10-10T13:04:25Z"
+        },
+        "available": false,
+        "limitation": "no samples in window for primary service"
+      },
+      "observations": [
+        "primary service astronomy/local/shipping first detected degraded at 2026-10-10T13:02:25Z",
+        "detector signals: latency_ms",
+        "before-window telemetry available (2026-10-10T13:00:00Z–2026-10-10T13:01:59Z)",
+        "during-window telemetry available (2026-10-10T13:02:00Z–2026-10-10T13:02:20Z)",
+        "incident still open (no recovery timestamp)"
+      ],
+      "inferences": [
+        "degradation is a detector finding from telemetry baselines (not proven root cause)"
+      ],
+      "limitations": [
+        "before/during/after digests are summaries, not full telemetry dumps",
+        "incident assembly does not use scenario ground-truth labels",
+        "correlation with changes is a separate step and does not prove causation"
+      ],
+      "evidence": [
+        {
+          "ref": "finding:astronomy/local/shipping|latency_ms|20261010T130225.000000000Z",
+          "summary": "observed latency degradation: current_median_ms=5000.00 baseline_median_ms=200.00 rel_increase=24.00 (correlated change, not proven causation)"
+        }
+      ],
+      "summary": "astronomy/local/shipping degradation detected via latency_ms (evidence snapshot; not proven causation)"
+    },
+    "correlation": {
+      "schema_version": "pulse.correlation.v1",
+      "scorer_version": "temporal-service-overlap-v1",
+      "incident_id": "inc|astronomy/local/shipping|20261010T130225.000000000Z",
+      "generated_at": "2026-10-11T03:54:34.932147Z",
+      "candidates": [
+        {
+          "schema_version": "pulse.correlation.v1",
+          "correlation_id": "corr|inc|astronomy/local/shipping|20261010T130225.000000000Z|deployment|astronomy/local/shipping|20261011T035434.929526000Z|1",
+          "scorer_version": "temporal-service-overlap-v1",
+          "incident_id": "inc|astronomy/local/shipping|20261010T130225.000000000Z",
+          "change_id": "deployment|astronomy/local/shipping|20261011T035434.929526000Z",
+          "rank": 1,
+          "score": 81,
+          "temporal_distance_secs": 180,
+          "service_overlap": "primary",
+          "environment_match": true,
+          "evidence": [
+            {
+              "ref": "change:deployment|astronomy/local/shipping|20261011T035434.929526000Z",
+              "summary": "simulated shipping deploy"
+            },
+            {
+              "ref": "incident:inc|astronomy/local/shipping|20261010T130225.000000000Z",
+              "summary": "astronomy/local/shipping degradation detected via latency_ms (evidence snapshot; not proven causation)"
+            }
+          ],
+          "observations": [
+            "change deployment|astronomy/local/shipping|20261011T035434.929526000Z (deployment) effective at 2026-10-10T12:59:25Z",
+            "incident detected at 2026-10-10T13:02:25Z (180s later)",
+            "change service_ids=[astronomy/local/shipping] mapping=explicit",
+            "incident primary service=astronomy/local/shipping",
+            "environment match: local",
+            "change is a simulated deployment marker (not a real cloud deploy)"
+          ],
+          "inferences": [
+            "change is a strong candidate related change (correlation, not causation)"
+          ],
+          "limitations": [
+            "NOT PROVEN: change did not necessarily cause the incident",
+            "score reflects temporal proximity and service overlap only",
+            "simulated marker — represents a modeled change event for demo/eval"
+          ],
+          "score_breakdown": {
+            "temporal_points": 36,
+            "primary_points": 35,
+            "topology_points": 0,
+            "environment_points": 10,
+            "excluded": false
+          }
+        }
+      ],
+      "top1": {
+        "schema_version": "pulse.correlation.v1",
+        "correlation_id": "corr|inc|astronomy/local/shipping|20261010T130225.000000000Z|deployment|astronomy/local/shipping|20261011T035434.929526000Z|1",
+        "scorer_version": "temporal-service-overlap-v1",
+        "incident_id": "inc|astronomy/local/shipping|20261010T130225.000000000Z",
+        "change_id": "deployment|astronomy/local/shipping|20261011T035434.929526000Z",
+        "rank": 1,
+        "score": 81,
+        "temporal_distance_secs": 180,
+        "service_overlap": "primary",
+        "environment_match": true,
+        "evidence": [
+          {
+            "ref": "change:deployment|astronomy/local/shipping|20261011T035434.929526000Z",
+            "summary": "simulated shipping deploy"
+          },
+          {
+            "ref": "incident:inc|astronomy/local/shipping|20261010T130225.000000000Z",
+            "summary": "astronomy/local/shipping degradation detected via latency_ms (evidence snapshot; not proven causation)"
+          }
+        ],
+        "observations": [
+          "change deployment|astronomy/local/shipping|20261011T035434.929526000Z (deployment) effective at 2026-10-10T12:59:25Z",
+          "incident detected at 2026-10-10T13:02:25Z (180s later)",
+          "change service_ids=[astronomy/local/shipping] mapping=explicit",
+          "incident primary service=astronomy/local/shipping",
+          "environment match: local",
+          "change is a simulated deployment marker (not a real cloud deploy)"
+        ],
+        "inferences": [
+          "change is a strong candidate related change (correlation, not causation)"
+        ],
+        "limitations": [
+          "NOT PROVEN: change did not necessarily cause the incident",
+          "score reflects temporal proximity and service overlap only",
+          "simulated marker — represents a modeled change event for demo/eval"
+        ],
+        "score_breakdown": {
+          "temporal_points": 36,
+          "primary_points": 35,
+          "topology_points": 0,
+          "environment_points": 10,
+          "excluded": false
+        }
+      },
+      "top3": [
+        {
+          "schema_version": "pulse.correlation.v1",
+          "correlation_id": "corr|inc|astronomy/local/shipping|20261010T130225.000000000Z|deployment|astronomy/local/shipping|20261011T035434.929526000Z|1",
+          "scorer_version": "temporal-service-overlap-v1",
+          "incident_id": "inc|astronomy/local/shipping|20261010T130225.000000000Z",
+          "change_id": "deployment|astronomy/local/shipping|20261011T035434.929526000Z",
+          "rank": 1,
+          "score": 81,
+          "temporal_distance_secs": 180,
+          "service_overlap": "primary",
+          "environment_match": true,
+          "evidence": [
+            {
+              "ref": "change:deployment|astronomy/local/shipping|20261011T035434.929526000Z",
+              "summary": "simulated shipping deploy"
+            },
+            {
+              "ref": "incident:inc|astronomy/local/shipping|20261010T130225.000000000Z",
+              "summary": "astronomy/local/shipping degradation detected via latency_ms (evidence snapshot; not proven causation)"
+            }
+          ],
+          "observations": [
+            "change deployment|astronomy/local/shipping|20261011T035434.929526000Z (deployment) effective at 2026-10-10T12:59:25Z",
+            "incident detected at 2026-10-10T13:02:25Z (180s later)",
+            "change service_ids=[astronomy/local/shipping] mapping=explicit",
+            "incident primary service=astronomy/local/shipping",
+            "environment match: local",
+            "change is a simulated deployment marker (not a real cloud deploy)"
+          ],
+          "inferences": [
+            "change is a strong candidate related change (correlation, not causation)"
+          ],
+          "limitations": [
+            "NOT PROVEN: change did not necessarily cause the incident",
+            "score reflects temporal proximity and service overlap only",
+            "simulated marker — represents a modeled change event for demo/eval"
+          ],
+          "score_breakdown": {
+            "temporal_points": 36,
+            "primary_points": 35,
+            "topology_points": 0,
+            "environment_points": 10,
+            "excluded": false
+          }
+        }
+      ],
+      "strong_candidate": true,
+      "no_strong_candidate": false,
+      "observations": [
+        "incident inc|astronomy/local/shipping|20261010T130225.000000000Z primary service astronomy/local/shipping first detected at 2026-10-10T13:02:25Z",
+        "evaluated 1 change events; 1 candidates after filters",
+        "top candidate change deployment|astronomy/local/shipping|20261011T035434.929526000Z score=81.0 temporal_distance=180s overlap=primary"
+      ],
+      "inferences": [
+        "top-ranked change is a strong temporal/service correlation candidate (not proven causation)"
+      ],
+      "limitations": [
+        "correlation is not proven causation",
+        "scores use temporal proximity and service overlap only",
+        "scenario ground-truth labels are never used in scoring"
+      ]
+    },
+    "graph_node": "shipping"
+  },
+  "incidents": {
+    "schema_version": "pulse.api.incidents.v1",
+    "generated_at": "2026-10-10T13:02:25Z",
+    "data_sources": {
+      "observations": "process_memory_unavailable",
+      "incidents": "file_store",
+      "changes": "file_store"
+    },
+    "limitations": [
+      "Incident list is a persisted snapshot under the Pulse data directory.",
+      "Evaluation labels and harness records are not included in this API."
+    ],
+    "count": 1,
+    "limit": 50,
+    "incidents": [
+      {
+        "schema_version": "pulse.incident.v1",
+        "incident_id": "inc|astronomy/local/shipping|20261010T130225.000000000Z",
+        "primary_service_id": "astronomy/local/shipping",
+        "environment": "local",
+        "finding_ids": [
+          "astronomy/local/shipping|latency_ms|20261010T130225.000000000Z"
+        ],
+        "signal_types": [
+          "latency_ms"
+        ],
+        "first_detected_at": "2026-10-10T13:02:25Z",
+        "last_observed_at": "2026-10-10T13:02:25Z",
+        "affected_service_ids": [
+          "astronomy/local/shipping"
+        ],
+        "before": {
+          "phase": "before",
+          "window": {
+            "start": "2026-10-10T13:00:00Z",
+            "end": "2026-10-10T13:01:59.999Z"
+          },
+          "digests": [
+            {
+              "signal": "call_rate",
+              "count": 6,
+              "median": 0.5,
+              "min": 0.5,
+              "max": 0.5,
+              "first_at": "2026-10-10T13:00:00Z",
+              "last_at": "2026-10-10T13:01:40Z"
+            },
+            {
+              "signal": "latency_ms",
+              "count": 6,
+              "median": 200,
+              "min": 200,
+              "max": 200,
+              "first_at": "2026-10-10T13:00:00Z",
+              "last_at": "2026-10-10T13:01:40Z"
+            }
+          ],
+          "available": true
+        },
+        "during": {
+          "phase": "during",
+          "window": {
+            "start": "2026-10-10T13:02:00Z",
+            "end": "2026-10-10T13:02:20Z"
+          },
+          "digests": [
+            {
+              "signal": "call_rate",
+              "count": 3,
+              "median": 0.5,
+              "min": 0.5,
+              "max": 0.5,
+              "first_at": "2026-10-10T13:02:00Z",
+              "last_at": "2026-10-10T13:02:20Z"
+            },
+            {
+              "signal": "latency_ms",
+              "count": 3,
+              "median": 5000,
+              "min": 5000,
+              "max": 5000,
+              "first_at": "2026-10-10T13:02:00Z",
+              "last_at": "2026-10-10T13:02:20Z"
+            }
+          ],
+          "available": true
+        },
+        "after": {
+          "phase": "after",
+          "window": {
+            "start": "2026-10-10T13:02:25Z",
+            "end": "2026-10-10T13:04:25Z"
+          },
+          "available": false,
+          "limitation": "no samples in window for primary service"
+        },
+        "observations": [
+          "primary service astronomy/local/shipping first detected degraded at 2026-10-10T13:02:25Z",
+          "detector signals: latency_ms",
+          "before-window telemetry available (2026-10-10T13:00:00Z–2026-10-10T13:01:59Z)",
+          "during-window telemetry available (2026-10-10T13:02:00Z–2026-10-10T13:02:20Z)",
+          "incident still open (no recovery timestamp)"
+        ],
+        "inferences": [
+          "degradation is a detector finding from telemetry baselines (not proven root cause)"
+        ],
+        "limitations": [
+          "before/during/after digests are summaries, not full telemetry dumps",
+          "incident assembly does not use scenario ground-truth labels",
+          "correlation with changes is a separate step and does not prove causation"
+        ],
+        "evidence": [
+          {
+            "ref": "finding:astronomy/local/shipping|latency_ms|20261010T130225.000000000Z",
+            "summary": "observed latency degradation: current_median_ms=5000.00 baseline_median_ms=200.00 rel_increase=24.00 (correlated change, not proven causation)"
+          }
+        ],
+        "summary": "astronomy/local/shipping degradation detected via latency_ms (evidence snapshot; not proven causation)"
+      }
+    ]
+  },
+  "services": {
+    "schema_version": "pulse.api.services.v1",
+    "generated_at": "2026-10-10T13:02:25Z",
+    "data_sources": {
+      "observations": "process_memory_unavailable",
+      "incidents": "file_store",
+      "changes": "file_store"
+    },
+    "limitations": [
+      "Pulse intelligence is distinct from active health probes (GET /api/status).",
+      "This endpoint returns a snapshot; it is not a continuous live stream.",
+      "Observation history is process-local and unavailable in this viz process; intelligence uses persisted incidents when present and never treats missing data as healthy."
+    ],
+    "count": 1,
+    "limit": 50,
+    "services": [
+      {
+        "schema_version": "pulse.api.service_status.v1",
+        "service_id": "astronomy/local/shipping",
+        "graph_node": "shipping",
+        "mapping_source": "astronomy_compose",
+        "intelligence": "degraded",
+        "intelligence_available": true,
+        "observation_source": "persisted_incident",
+        "last_observed_at": "2026-10-10T13:02:25Z",
+        "freshness": "fresh",
+        "age_seconds": 0,
+        "open_incident_ids": [
+          "inc|astronomy/local/shipping|20261010T130225.000000000Z"
+        ],
+        "related_incident_ids": [
+          "inc|astronomy/local/shipping|20261010T130225.000000000Z"
+        ],
+        "limitations": [
+          "No process-local observation store is wired; cannot report fresh telemetry intelligence.",
+          "Intelligence derived from open persisted incidents (snapshot), not a live probe."
+        ],
+        "active_health_note": "Active reachability/latency probes remain on GET /api/status and are not represented here."
+      }
+    ]
+  }
+}

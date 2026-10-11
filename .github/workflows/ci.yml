@@ -9,11 +9,16 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-go-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Job name kept as "Go" so existing branch-protection required checks continue to match.
   go:
     name: Go
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       GOTOOLCHAIN: auto
     steps:
@@ -38,3 +43,10 @@ jobs:
 
       - name: Verify
         run: make verify
+
+      # Explicit subsets (also covered by go test ./... inside verify) for log clarity.
+      - name: Perch regression suite
+        run: make perch-regression
+
+      - name: Pulse pipeline integration
+        run: make pulse-integration
