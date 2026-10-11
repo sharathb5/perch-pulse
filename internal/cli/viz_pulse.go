@@ -8,11 +8,12 @@ import (
 	"strings"
 
 	pulseapi "github.com/yashg4509/perch/internal/pulse/api"
+	"github.com/yashg4509/perch/internal/pulse/runpulse"
 )
 
-// registerPulseAPI mounts read-only Pulse endpoints on the viz mux.
-// Failures to resolve astronomy mapping fall back to an empty mapper so
-// core Perch viz still starts without Astronomy Shop.
+// registerPulseAPI mounts Pulse endpoints on the viz mux (historical read APIs +
+// optional Run Pulse diagnostics). Failures to resolve astronomy mapping fall
+// back to an empty mapper so core Perch viz still starts without Astronomy Shop.
 // env is the selected perch.yaml environment (same as --env / graph queries).
 func registerPulseAPI(mux *http.ServeMux, env string) error {
 	dir, err := vizPulseDataDir()
@@ -28,6 +29,16 @@ func registerPulseAPI(mux *http.ServeMux, env string) error {
 		return err
 	}
 	h := &pulseapi.Handler{Reader: reader}
+
+	// Run Pulse: explicit env config; invalid allowlist → engine omitted (workflows 503 / unavailable).
+	if cfg, err := runpulse.ConfigFromEnv(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "# → Run Pulse disabled: %v\n", err)
+	} else if eng, err := runpulse.NewEngine(cfg, mapper); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "# → Run Pulse disabled: %v\n", err)
+	} else {
+		h.Runs = eng
+	}
+
 	h.Register(mux)
 	return nil
 }

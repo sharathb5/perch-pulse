@@ -1,0 +1,24 @@
+{
+  "schema_version": "pulse.api.runs.create.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "limitations": [
+    "Poll GET /api/pulse/runs/{id} for status; do not POST again to refresh."
+  ],
+  "run": {
+    "id": "run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "workflow_id": "astronomy.recommendations-browse.v1",
+    "display_name": "Recommendations Browse",
+    "environment": "astronomy-shop/local",
+    "status": "pending",
+    "phase": "queued",
+    "started_at": "2026-10-10T12:00:00Z",
+    "services": [],
+    "unmapped_services": [],
+    "graph_nodes": [],
+    "graph_nodes_with_errors": [],
+    "warnings": [],
+    "limitations": [
+      "On-demand diagnostic only — not continuous monitoring or incident detection."
+    ]
+  }
+}

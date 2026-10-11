@@ -24,15 +24,19 @@ import {
   indexGraphNodeByServiceId,
   indexPulseByGraphNode,
   isSimulatedChange,
+  decodeRunId,
   normalizePulseTab,
   parseChangeDetailResponse,
   parseChangesResponse,
   parseIncidentDetailResponse,
   parseIncidentsResponse,
+  parseRunResponse,
   parseServicesResponse,
+  parseWorkflowsResponse,
   pulseIncidentApiPath,
   pulseIncidentPath,
   pulseStackPath,
+  runFailureSummary,
   sortChangesDeterministic,
   sortIncidentsDeterministic,
 } from './pulse.js'
@@ -217,6 +221,43 @@ describe('URL-safe incident navigation', () => {
     expect(pulseStackPath('fixture-stack', { nodeId: 'api' })).toBe('/stack/fixture-stack/api')
     expect(normalizePulseTab('overview')).toBe(PULSE_TAB.OVERVIEW)
     expect(normalizePulseTab('nope')).toBe(null)
+  })
+
+  it('supports Run Pulse tab and run query param', () => {
+    expect(normalizePulseTab('run')).toBe(PULSE_TAB.RUN)
+    expect(decodeRunId('run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).toBe(
+      'run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    )
+    expect(decodeRunId('not-a-run')).toBe('')
+    expect(
+      pulseStackPath('fixture-stack', {
+        nodeId: 'web',
+        pulseTab: 'run',
+        runId: 'run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      }),
+    ).toBe(
+      '/stack/fixture-stack/web?pulse=run&run=run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    )
+  })
+
+  it('parses workflows and completed run fixtures', () => {
+    const wf = parseWorkflowsResponse(load('pulse.workflows.unavailable.json'))
+    expect(wf.ok).toBe(true)
+    expect(wf.response.workflows[0].available).toBe(false)
+    expect(wf.response.workflows[0].unavailabilityReason).toMatch(/not configured/)
+
+    const run = parseRunResponse(load('pulse.run.completed.graph.json'))
+    expect(run.ok).toBe(true)
+    expect(run.response.run.status).toBe('completed')
+    expect(run.response.run.graphNodes).toEqual(['api', 'web'])
+    expect(run.response.run.trace.appServices).toContain('frontend')
+    expect(run.response.run.request.ok).toBe(true)
+    expect(containsGroundTruthLeak(run.response)).toBe(false)
+  })
+
+  it('runFailureSummary distinguishes incomplete trace from HTTP success', () => {
+    const failed = parseRunResponse(load('pulse.run.failed.json')).response.run
+    expect(runFailureSummary(failed)).toMatch(/incomplete/i)
   })
 
   it('parses incident detail contract', () => {

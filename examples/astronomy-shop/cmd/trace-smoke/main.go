@@ -6,12 +6,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,15 +57,11 @@ func main() {
 
 	client := &http.Client{Timeout: time.Duration(*reqTimeout) * time.Second}
 	windowStart := time.Now().UTC().Add(-2 * time.Second)
-	probeURL := fmt.Sprintf("%s%s?productIds=%s",
-		strings.TrimRight(*baseURL, "/"),
-		tracesmoke.RecommendationsPath,
-		url.QueryEscape(*productID),
-	)
+	probeURL := tracesmoke.RecommendationsProbeURL(*baseURL, *productID)
 
 	writeFile(*artifactDir, "trace-smoke-config.txt", strings.Join([]string{
 		"workflow=" + tracesmoke.RecommendationsBrowse,
-		"probe_url=" + redactURL(probeURL),
+		"probe_url=" + tracesmoke.RedactURL(probeURL),
 		"jaeger_base=" + jb,
 		"marker=" + *marker,
 		"product_id=" + *productID,
@@ -112,7 +105,7 @@ func main() {
 	}
 
 	// Reachability: services API must respond (malformed → immediate fail).
-	servicesURL := jb + "/api/services"
+	servicesURL := tracesmoke.ServicesURL(jb)
 	servicesBody, err := getBytes(ctx, client, servicesURL)
 	if err != nil {
 		collectFailureDiagnostics(ctx, client, jb, *artifactDir, "jaeger_unreachable")
@@ -185,74 +178,19 @@ func main() {
 }
 
 func doProbe(ctx context.Context, client *http.Client, probeURL, marker string) (int, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
-	if err != nil {
-		return 0, 0, err
+	res := tracesmoke.ProbeGET(ctx, client, probeURL, marker)
+	if res.Error != "" {
+		return res.StatusCode, res.BodyBytes, fmt.Errorf("%s", res.Error)
 	}
-	req.Header.Set("User-Agent", marker)
-	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer resp.Body.Close()
-	n, _ := io.Copy(io.Discard, io.LimitReader(resp.Body, 64*1024))
-	return resp.StatusCode, int(n), nil
+	return res.StatusCode, res.BodyBytes, nil
 }
 
 func getBytes(ctx context.Context, client *http.Client, rawURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	return io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	return tracesmoke.GetJSONBytes(ctx, client, rawURL)
 }
 
 func queryTraces(ctx context.Context, client *http.Client, jaegerBase, service string, start, end time.Time, marker string) (tracesmoke.TracesResponse, error) {
-	// Prefer exact user_agent tag filter to avoid drowning in load-generator noise.
-	raw, err := getBytes(ctx, client, tracesURL(jaegerBase, service, start, end, 50, marker))
-	if err == nil {
-		parsed, perr := tracesmoke.ParseTraces(raw)
-		if perr != nil {
-			return tracesmoke.TracesResponse{}, perr
-		}
-		if len(parsed.Data) > 0 {
-			return parsed, nil
-		}
-	}
-	// Fallback: tag filter unsupported / user_agent.original-only instrumentation.
-	raw, err = getBytes(ctx, client, tracesURL(jaegerBase, service, start, end, 50, ""))
-	if err != nil {
-		return tracesmoke.TracesResponse{}, err
-	}
-	parsed, perr := tracesmoke.ParseTraces(raw)
-	if perr != nil {
-		return tracesmoke.TracesResponse{}, perr
-	}
-	return parsed, nil
-}
-
-func tracesURL(jaegerBase, service string, start, end time.Time, limit int, marker string) string {
-	q := url.Values{}
-	q.Set("service", service)
-	q.Set("limit", fmt.Sprintf("%d", limit))
-	q.Set("start", fmt.Sprintf("%d", start.UnixMicro()))
-	q.Set("end", fmt.Sprintf("%d", end.UnixMicro()))
-	if marker != "" {
-		// Exact tag match when instrumentation records user_agent on the span.
-		tags, _ := json.Marshal(map[string]string{"user_agent": marker})
-		q.Set("tags", string(tags))
-	}
-	return jaegerBase + "/api/traces?" + q.Encode()
+	return tracesmoke.QueryTraces(ctx, client, jaegerBase, service, start, end, marker, 50)
 }
 
 func summarizeTraces(traces []tracesmoke.Trace, max int) string {
@@ -288,7 +226,7 @@ func collectFailureDiagnostics(ctx context.Context, client *http.Client, jaegerB
 		}
 		writeFile(dir, "docker-logs-"+name+".txt", redactLogText(out))
 	}
-	if body, err := getBytes(ctx, client, jaegerBase+"/api/services"); err == nil {
+	if body, err := getBytes(ctx, client, tracesmoke.ServicesURL(jaegerBase)); err == nil {
 		if svc, perr := tracesmoke.ParseServices(body); perr == nil {
 			writeFile(dir, "jaeger-services-names-on-failure.txt", strings.Join(svc.Data, "\n")+"\n")
 		}
@@ -354,15 +292,6 @@ func snip(s string, n int) string {
 		return s
 	}
 	return s[:n] + "\n… truncated …\n"
-}
-
-func redactURL(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return raw
-	}
-	u.User = nil
-	return u.String()
 }
 
 func fail(format string, args ...any) {

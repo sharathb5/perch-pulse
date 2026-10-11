@@ -1,0 +1,29 @@
+{
+  "schema_version": "pulse.api.run.v1",
+  "generated_at": "2026-10-10T12:00:05Z",
+  "limitations": ["FIXTURE: deterministic UI test payload — not live telemetry."],
+  "run": {
+    "id": "run_cccccccccccccccccccccccccccccccc",
+    "workflow_id": "astronomy.recommendations-browse.v1",
+    "display_name": "Recommendations Browse",
+    "environment": "astronomy-shop/local",
+    "status": "running",
+    "phase": "waiting_for_trace",
+    "started_at": "2026-10-10T12:00:00Z",
+    "request": {
+      "method": "GET",
+      "url_redacted": "http://127.0.0.1:8080/api/recommendations?productIds=OLJCESPC7Z",
+      "status_code": 200,
+      "elapsed_ms": 40.0,
+      "attempts": 1,
+      "ok": true,
+      "marker": "perch-run-pulse/run_cccccccccccccccccccccccccccccccc"
+    },
+    "services": [],
+    "unmapped_services": [],
+    "graph_nodes": [],
+    "graph_nodes_with_errors": [],
+    "warnings": [],
+    "limitations": []
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "_comment": "SYNTHETIC Jaeger traces response: duplicate span entries still qualify when multi-service",
+  "_comment": "SYNTHETIC Jaeger traces response: duplicate spanIDs must fail qualification",
   "data": [
     {
       "traceID": "12121212121212121212121212121212",

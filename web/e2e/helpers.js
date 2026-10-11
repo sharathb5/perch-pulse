@@ -23,6 +23,13 @@ export const fixtures = {
   pulseIncidentDetail: loadFixture('pulse.incident.detail.json'),
   pulseChanges: loadFixture('pulse.changes.json'),
   pulseChangesEmpty: loadFixture('pulse.changes.empty.json'),
+  pulseWorkflowsUnavailable: loadFixture('pulse.workflows.unavailable.json'),
+  pulseWorkflowsAvailable: loadFixture('pulse.workflows.available.json'),
+  pulseRunCreate: loadFixture('pulse.run.create.json'),
+  pulseRunCompleted: loadFixture('pulse.run.completed.json'),
+  pulseRunCompletedGraph: loadFixture('pulse.run.completed.graph.json'),
+  pulseRunRunning: loadFixture('pulse.run.running.json'),
+  pulseRunFailed: loadFixture('pulse.run.failed.json'),
 }
 
 /**
@@ -37,6 +44,11 @@ export const fixtures = {
  *   pulseIncidentDetail?: object,
  *   pulseChanges?: object,
  *   pulseStatus?: number,
+ *   pulseWorkflows?: object,
+ *   pulseRun?: object,
+ *   pulseRunCreate?: object,
+ *   pulseWorkflowsStatus?: number,
+ *   pulseRunsStatus?: number,
  * }} opts
  */
 export async function mockApis(page, opts = {}) {
@@ -61,6 +73,11 @@ export async function mockApis(page, opts = {}) {
       ? fixtures.pulseChanges
       : fixtures.pulseChangesEmpty)
   const pulseStatus = opts.pulseStatus ?? 200
+  const pulseWorkflows = opts.pulseWorkflows ?? fixtures.pulseWorkflowsUnavailable
+  const pulseRun = opts.pulseRun ?? fixtures.pulseRunCompletedGraph
+  const pulseRunCreate = opts.pulseRunCreate ?? fixtures.pulseRunCreate
+  const pulseWorkflowsStatus = opts.pulseWorkflowsStatus ?? 200
+  const pulseRunsStatus = opts.pulseRunsStatus ?? 200
 
   await page.route('**/api/graph**', async (route) => {
     if (graphStatus >= 400) {
@@ -165,6 +182,69 @@ export async function mockApis(page, opts = {}) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(isDetail ? pulseDetail : pulseIncidentsResolved),
+    })
+  })
+
+  await page.route('**/api/pulse/workflows**', async (route) => {
+    if (pulseWorkflowsStatus >= 400) {
+      await route.fulfill({
+        status: pulseWorkflowsStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'pulse.api.error.v1',
+          error: 'workflows unavailable',
+          code: 'unavailable',
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(pulseWorkflows),
+    })
+  })
+
+  await page.route('**/api/pulse/runs**', async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname
+    if (req.method() === 'POST') {
+      if (pulseRunsStatus >= 400) {
+        await route.fulfill({
+          status: pulseRunsStatus,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            schema_version: 'pulse.api.error.v1',
+            error: 'could not start diagnostic',
+            code: 'unavailable',
+          }),
+        })
+        return
+      }
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify(pulseRunCreate),
+      })
+      return
+    }
+    // GET /api/pulse/runs/{id}
+    if (pulseRunsStatus >= 400 || !/\/api\/pulse\/runs\/.+/.test(path)) {
+      await route.fulfill({
+        status: pulseRunsStatus >= 400 ? pulseRunsStatus : 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'pulse.api.error.v1',
+          error: 'run not found',
+          code: 'not_found',
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(pulseRun),
     })
   })
 

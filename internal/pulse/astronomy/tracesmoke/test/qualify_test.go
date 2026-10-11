@@ -132,14 +132,17 @@ func TestQualify_MissingProcessesFails(t *testing.T) {
 	}
 }
 
-func TestQualify_DuplicateSpansStillOK(t *testing.T) {
+func TestQualify_DuplicateSpansRejected(t *testing.T) {
 	resp, err := tracesmoke.ParseTraces(testdata(t, "synthetic_duplicate_spans.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	res, ok := tracesmoke.FindQualifyingTrace(resp.Data, baseCriteria())
-	if !ok || !res.OK {
-		t.Fatalf("duplicate spans should still qualify: %+v", res)
+	if ok || res.OK {
+		t.Fatalf("duplicate spanIDs must not qualify: %+v", res)
+	}
+	if !contains(res.Reason, "duplicate spanID") {
+		t.Fatalf("reason=%q", res.Reason)
 	}
 }
 

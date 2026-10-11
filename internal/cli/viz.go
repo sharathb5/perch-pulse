@@ -104,11 +104,11 @@ func runViz(cmd *cobra.Command, args []string) error {
 		}
 		serveCredentialsPost(w, r)
 	})
-	// Milestone A: read-only Pulse API (optional relative to core Perch).
+	// Pulse API (historical read + optional Run Pulse); optional relative to core Perch.
 	if err := registerPulseAPI(mux, defaultEnv); err != nil {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "# →", pulseAPIMountError(err))
 	} else {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "# → Pulse read-only API mounted at /api/pulse/*")
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "# → Pulse API mounted at /api/pulse/* (Run Pulse when PERCH_RUN_PULSE_DEMO_BASE_URL is set)")
 	}
 	mux.Handle("/", spaHandler(uiFS))
 

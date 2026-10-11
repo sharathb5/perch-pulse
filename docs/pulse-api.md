@@ -1,6 +1,8 @@
-# Pulse read-only HTTP API (Milestone A)
+# Pulse HTTP API (Milestone A + E)
 
-Localhost JSON for the Perch React UI. Mounted on the existing `perch viz` server (127.0.0.1). See [ADR-014](DECISIONS.md).
+Localhost JSON for the Perch React UI. Mounted on the existing `perch viz` server (127.0.0.1). See [ADR-014](DECISIONS.md) and [ADR-020](DECISIONS.md).
+
+Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted POST for on-demand diagnostics — see [`pulse-run.md`](pulse-run.md).
 
 ## Routes
 
@@ -11,6 +13,9 @@ Localhost JSON for the Perch React UI. Mounted on the existing `perch viz` serve
 | GET | `/api/pulse/incidents/{id...}` | Incident detail + on-read correlation |
 | GET | `/api/pulse/changes` | Recorded changes (`?limit=`) |
 | GET | `/api/pulse/changes/{id...}` | Change detail |
+| GET | `/api/pulse/workflows` | Run Pulse allowlisted workflow catalog |
+| POST | `/api/pulse/runs` | Start one Run Pulse diagnostic (loopback only) |
+| GET | `/api/pulse/runs/{id}` | Poll Run Pulse run status / bounded evidence |
 
 `{id...}` is required because Pulse IDs embed `/` (e.g. `inc|astronomy/local/shipping|…`).
 
@@ -57,7 +62,9 @@ Response fields for Milestone B:
 
 ## Security
 
-- Read-only; localhost bind preserved.
+- Localhost bind preserved (`127.0.0.1`).
+- Historical routes remain read-only.
+- Run Pulse POST is loopback-only, allowlisted workflows only, no arbitrary URLs (see [`pulse-run.md`](pulse-run.md)).
 - Resource IDs validated against path traversal / control characters.
 - Secret-shaped metadata and bearer-like substrings redacted before JSON encode.
 - No PromQL, Docker, credential dumps, or arbitrary filesystem reads outside the Pulse store root.
