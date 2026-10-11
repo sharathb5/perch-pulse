@@ -86,7 +86,26 @@ func Build(in BuildInput) (Incident, error) {
 	}
 
 	beforeWin := Window{Start: first.Add(-beforePad), End: first}
+	// Detector Evaluate stamps FirstDetectedAt=LastObservedAt=clock. Prefer the
+	// finding's ObservedWindow for during digests so regression samples are retained.
 	duringWin := Window{Start: first, End: duringEnd}
+	if !primary.ObservedWindow.Start.IsZero() && !primary.ObservedWindow.End.IsZero() {
+		duringWin = Window{
+			Start: primary.ObservedWindow.Start.UTC(),
+			End:   primary.ObservedWindow.End.UTC(),
+		}
+		if recovered != nil && recovered.After(duringWin.End) {
+			duringWin.End = recovered.UTC()
+		}
+		if duringWin.End.After(last) {
+			last = duringWin.End
+			duringEnd = duringWin.End
+		}
+		// Keep before distinct from during (half-open at the boundary) so spike
+		// samples are not double-counted into the before digest.
+		beforeWin.End = duringWin.Start.Add(-time.Millisecond)
+		beforeWin.Start = duringWin.Start.Add(-beforePad)
+	}
 	afterStart := duringEnd
 	afterWin := Window{Start: afterStart, End: afterStart.Add(afterPad)}
 

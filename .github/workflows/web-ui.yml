@@ -7,15 +7,22 @@ on:
       - 'web/**'
       - '.github/workflows/web-ui.yml'
       - 'Makefile'
+      # Pipeline contract fixture is produced by Go INTEGRATION tests.
+      - 'internal/pulse/pipeline/**'
   pull_request:
     branches: [main]
     paths:
       - 'web/**'
       - '.github/workflows/web-ui.yml'
       - 'Makefile'
+      - 'internal/pulse/pipeline/**'
 
 permissions:
   contents: read
+
+concurrency:
+  group: web-ui-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 # Separate from the Go verify job so Playwright browser install does not slow Go tests.
 jobs:

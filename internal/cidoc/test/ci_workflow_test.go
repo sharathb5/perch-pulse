@@ -27,9 +27,42 @@ func TestGitHubActionsWorkflow(t *testing.T) {
 		"main",
 		// Must match go.mod toolchain (not language `go` line via go-version-file).
 		"go-version: '1.27.2'",
+		"cancel-in-progress: true",
+		"make perch-regression",
+		"make pulse-integration",
+		"timeout-minutes: 30",
 	} {
 		if !strings.Contains(s, needle) {
 			t.Errorf("ci.yml should reference %q", needle)
+		}
+	}
+}
+
+func TestAstronomySmokeWorkflow_DispatchOnly(t *testing.T) {
+	t.Helper()
+	root := testutil.RepoRoot(t)
+	b, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "astronomy-smoke.yml"))
+	if err != nil {
+		t.Fatalf("read astronomy-smoke.yml: %v", err)
+	}
+	s := string(b)
+	if !strings.Contains(s, "workflow_dispatch") {
+		t.Fatal("astronomy-smoke must be workflow_dispatch")
+	}
+	if strings.Contains(s, "schedule:") {
+		t.Fatal("astronomy-smoke must not be scheduled yet")
+	}
+	if strings.Contains(s, "pull_request:") {
+		t.Fatal("astronomy-smoke must not run on pull_request")
+	}
+	for _, needle := range []string{
+		"confirm",
+		"ci-smoke.sh",
+		"ASTRONOMY_DEMO_PIN",
+		"timeout-minutes: 45",
+	} {
+		if !strings.Contains(s, needle) {
+			t.Errorf("astronomy-smoke.yml should reference %q", needle)
 		}
 	}
 }
@@ -99,6 +132,8 @@ func TestMakefileVerifyTarget(t *testing.T) {
 		"GOVULNCHECK_VERSION",
 		"GO_TOOLCHAIN",
 		"go1.27.2",
+		"perch-regression:",
+		"pulse-integration:",
 	} {
 		if !strings.Contains(s, needle) {
 			t.Errorf("Makefile should reference %q", needle)

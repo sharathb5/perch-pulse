@@ -28,6 +28,28 @@ Rules:
 
 ---
 
+## ADR-018: Milestone C.5 CI reliability gates
+
+**Date:** 2026-10-11  
+**Status:** Accepted  
+**Issue:** #26 (parent #17)
+
+**Context:** Milestones A–C and the UI verification framework landed layered unit/contract tests, but CI lacked an explicit original-Perch regression matrix, a single samples→API INTEGRATION path, and a safe optional live Astronomy Shop smoke plan. Disk and runner cost constrain what can be required on every PR.
+
+**Decision:**
+1. Keep `make verify` (+ existing Web UI Playwright job) as the required PR gate — no Docker, Astronomy Shop, Databricks, or live telemetry.
+2. Add `internal/pulse/pipeline` as a thin harness over real detect/incident/change/API packages; golden `web/fixtures/pulse.pipeline.contract.json` binds frontend Vitest to that path.
+3. Add focused `make perch-regression` / `make pulse-integration` (also run after verify in `ci.yml` for log clarity).
+4. Document coverage/honesty in `docs/CI_COVERAGE.md`.
+5. Add `astronomy-smoke.yml` as **workflow_dispatch only** (confirm=`run`), with resource preflight, 45m timeout, artifacts on completion/failure, and no `continue-on-error` hiding. Do not schedule or require it until stability/cost are measured.
+6. Redact Pulse CLI/`context --for-agent` outputs with the same helpers as the HTTP API.
+
+**Consequences:** PR CI stays deterministic and cheap. Live smoke may fail on undersized runners; that is reported honestly rather than forced green. Probe latency milliseconds remain an intentional product gap (not faked in tests).
+
+**Alternatives considered:** Embedding Astronomy Shop in `make verify` (rejected: disk/time); paid larger runners by default (rejected: needs approval); mocking the whole pipeline then calling it E2E (rejected: dishonest).
+
+---
+
 ## ADR-017: Pulse sidebar beside DetailPanel (Milestone C)
 
 **Date:** 2026-10-10  

@@ -96,6 +96,20 @@ test.describe('Pulse intelligence on service graph (Milestone B)', () => {
     await expect(page.getByTestId('pulse-error')).toContainText('Pulse unavailable')
   })
 
+  test('malformed Pulse JSON falls back safely; graph selection persists', async ({ page }) => {
+    // BROWSER: invalid Pulse payloads must not crash the SPA or clear selection.
+    await mockApis(page, {
+      pulseServices: { totally: 'wrong-shape' },
+      pulseIncidents: 'not-json-object',
+    })
+    await page.goto('/stack/fixture-stack/web')
+    await expectGraphReady(page)
+    await expect(page.getByTestId('service-node-web')).toBeVisible()
+    await expect(page.getByTestId('detail-panel')).toBeVisible()
+    await expect(page).toHaveURL(/\/stack\/fixture-stack\/web/)
+    await expect(page.getByTestId('status-pill').first()).toBeVisible()
+  })
+
   test('empty Pulse data does not break the graph', async ({ page }) => {
     await mockApis(page, {
       pulseServices: fixtures.pulseServicesEmpty,

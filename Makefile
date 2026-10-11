@@ -4,6 +4,7 @@
 
 .PHONY: build web-build web-deps web-build-embed web-lint web-test web-e2e \
 	go-fmt go-vet go-test provider-validate security \
+	perch-regression pulse-integration \
 	verify test lint run
 
 # Pin security scanners so the gate is reproducible across days.
@@ -47,6 +48,14 @@ go-vet:
 
 go-test:
 	go test ./...
+
+# Original Perch regression (CLI/graph/probes/viz) — no Docker/Pulse required.
+perch-regression:
+	go test ./internal/cli/... ./internal/cli/test/... ./internal/graph/test/... ./internal/stackstatus/test/... ./internal/config/test/... -count=1
+
+# Deterministic Pulse samples→detector→incident→API integration (no Docker).
+pulse-integration:
+	go test ./internal/pulse/pipeline/... ./internal/pulse/pipeline/test/... -count=1
 
 provider-validate:
 	go test ./internal/providerspec/... -count=1
