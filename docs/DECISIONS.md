@@ -28,6 +28,27 @@ Rules:
 
 ---
 
+## ADR-022: Live Pulse runtime inside perch viz (opt-in)
+
+**Date:** 2026-10-11  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** Milestones A–E expose historical Pulse APIs and on-demand Run Pulse, but continuous Astronomy Shop telemetry was only scraped by offline eval CLIs. Issue #17 needs passive ingestion in the long-running viz process without a second detector, without browser PromQL, and without conflating live regressions with probe health or Run Pulse.
+
+**Decision:**
+1. Add opt-in `internal/pulse/live` collector attached to viz lifecycle (signal-aware cancel + `Server.Shutdown`). One loop per process; APIs read a concurrency-safe snapshot only.
+2. Config via `PERCH_LIVE_PULSE_*` env vars; Prometheus URL must pass existing Run Pulse loopback allowlist helpers (`ValidateAllowlistedHTTPURL`, `SafeHTTPClient`). Disabled → live API reports unavailable, never healthy.
+3. Reuse `telem.Prometheus` (fixed spanmetrics PromQL), `detect.Detector`, `incident.Build`. Add `incident.Store.Upsert` so evidence refresh/recovery can update the same `incident_id` (Append remains append-only for harness writes).
+4. Mount `GET /api/pulse/live/status|services|incidents` on the existing mux without changing historical or Run Pulse routes.
+5. Service IDs stay `astronomy/<env>/<service>`; graph joins use AstronomyMapper only.
+
+**Consequences:** Continuous regression detection works against loopback demo Prometheus with deterministic fixture tests in `make verify`. Process restart clears baselines (documented). UI consumption is a stacked follow-up PR. Live Docker smoke remains optional / workflow_dispatch.
+
+**Alternatives considered:** Browser PromQL proxy (rejected: SSRF / cardinality); second “live detector” (rejected: drift); enabling on non-empty `PERCH_PROM_URL` alone (rejected: too easy to point at remote); rewriting FileStore to event-sourced log (deferred: Upsert sufficient for MVP).
+
+---
+
 ## ADR-021: Astronomy smoke exercises real Run Pulse HTTP API
 
 **Date:** 2026-10-11  

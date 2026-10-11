@@ -15,10 +15,13 @@ import (
 
 // Handler serves Pulse JSON on the existing viz mux.
 // Historical Pulse routes remain GET-only; Run Pulse adds allowlisted POST /api/pulse/runs.
+// Live Pulse adds optional GET /api/pulse/live/* over a collector snapshot.
 type Handler struct {
 	Reader *Reader
 	// Runs is optional; when nil, workflow/run endpoints return 503.
 	Runs *runpulse.Engine
+	// Live is optional; when nil, live endpoints report disabled/unavailable.
+	Live LiveSource
 }
 
 // Register mounts Pulse routes on mux.
@@ -30,6 +33,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/pulse/changes", h.handleChanges)
 	mux.HandleFunc("GET /api/pulse/changes/{id...}", h.handleChangeDetail)
 	h.registerRunRoutes(mux)
+	h.registerLiveRoutes(mux)
 }
 
 func (h *Handler) handleServices(w http.ResponseWriter, r *http.Request) {

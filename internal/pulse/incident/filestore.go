@@ -43,6 +43,31 @@ func (s *FileStore) Append(inc Incident) error {
 		}
 		return fmt.Errorf("incident: duplicate incident_id %q with conflicting payload", inc.IncidentID)
 	}
+	return s.writeLocked(path, inc)
+}
+
+// Upsert implements Store: replaces any prior payload for the same IncidentID.
+// Live Pulse uses this for evidence refresh and recovery transitions.
+func (s *FileStore) Upsert(inc Incident) error {
+	if err := inc.Validate(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := os.MkdirAll(s.incidentsDir(), 0o750); err != nil {
+		return err
+	}
+	path := s.pathFor(inc.IncidentID)
+	if prev, err := os.ReadFile(path); err == nil && len(prev) > 0 {
+		var existing Incident
+		if json.Unmarshal(prev, &existing) == nil && incidentsEqual(existing, inc) {
+			return nil
+		}
+	}
+	return s.writeLocked(path, inc)
+}
+
+func (s *FileStore) writeLocked(path string, inc Incident) error {
 	raw, err := json.MarshalIndent(cloneIncident(inc), "", "  ")
 	if err != nil {
 		return err

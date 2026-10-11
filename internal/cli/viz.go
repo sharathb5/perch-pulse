@@ -12,11 +12,13 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -104,12 +106,18 @@ func runViz(cmd *cobra.Command, args []string) error {
 		}
 		serveCredentialsPost(w, r)
 	})
-	// Pulse API (historical read + optional Run Pulse); optional relative to core Perch.
-	if err := registerPulseAPI(mux, defaultEnv); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Pulse API (historical read + optional Run Pulse + optional Live Pulse).
+	var pulseRT *pulseRuntime
+	if rt, err := registerPulseAPI(mux, defaultEnv, ctx); err != nil {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "# →", pulseAPIMountError(err))
 	} else {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "# → Pulse API mounted at /api/pulse/* (Run Pulse when PERCH_RUN_PULSE_DEMO_BASE_URL is set)")
+		pulseRT = rt
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "# → Pulse API mounted at /api/pulse/* (Run Pulse / Live Pulse when configured)")
 	}
+	defer pulseRT.Stop()
 	mux.Handle("/", spaHandler(uiFS))
 
 	srv := &http.Server{
@@ -118,8 +126,19 @@ func runViz(cmd *cobra.Command, args []string) error {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
+		BaseContext:  func(net.Listener) context.Context { return ctx },
 	}
-	return srv.ListenAndServe()
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
+	err = srv.ListenAndServe()
+	if err == nil || errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 func loadStackFromWD() (*config.Config, *provider.Registry, string, error) {

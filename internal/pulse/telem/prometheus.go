@@ -19,7 +19,13 @@ import (
 	"github.com/yashg4509/perch/internal/pulse/detect"
 )
 
-const defaultHTTPTimeout = 10 * time.Second
+const (
+	defaultHTTPTimeout = 10 * time.Second
+	// maxPromResponseBytes bounds a single Prometheus HTTP body.
+	maxPromResponseBytes = 4 << 20 // 4 MiB
+	// defaultMaxSeries rejects label/cardinality explosions per query.
+	defaultMaxSeries = 64
+)
 
 // Source yields detector samples at a point in time.
 type Source interface {
@@ -27,11 +33,17 @@ type Source interface {
 }
 
 // Prometheus scrapes windowed spanmetrics from a Prometheus HTTP API.
+// Queries are fixed/allowlisted in Collect — never accept PromQL from callers.
 type Prometheus struct {
 	BaseURL    string
 	HTTPClient *http.Client
 	Window     time.Duration // lookback for increase(); default 2m
 	Services   []string      // OTEL service names; empty = default shop core
+	// Environment is the Pulse identity segment (astronomy/<env>/<service>).
+	// Empty defaults to astronomy.LocalEnvironment.
+	Environment string
+	// MaxSeries caps series returned per query (default 64).
+	MaxSeries int
 }
 
 // NewPrometheus returns a client with timeouts.
@@ -46,7 +58,9 @@ func NewPrometheus(baseURL string) *Prometheus {
 			Timeout: defaultHTTPTimeout,
 		},
 		// Spanmetrics via OTLP often need >=2m of increase() for stable points.
-		Window: 2 * time.Minute,
+		Window:      2 * time.Minute,
+		Environment: astronomy.LocalEnvironment,
+		MaxSeries:   defaultMaxSeries,
 		Services: []string{
 			"payment", "shipping", "checkout", "frontend", "cart",
 			"product-catalog", "recommendation", "ad", "currency", "email", "quote",
@@ -67,6 +81,7 @@ type promResponse struct {
 }
 
 // Collect queries latency_ms, error_rate, and call_rate per configured service.
+// Missing series are omitted — never invented as zero errors or healthy status.
 func (p *Prometheus) Collect(ctx context.Context, at time.Time) ([]detect.Sample, error) {
 	at = at.UTC()
 	win := p.Window
@@ -74,8 +89,13 @@ func (p *Prometheus) Collect(ctx context.Context, at time.Time) ([]detect.Sample
 		win = 2 * time.Minute
 	}
 	winStr := formatPromDuration(win)
+	env := strings.TrimSpace(p.Environment)
+	if env == "" {
+		env = astronomy.LocalEnvironment
+	}
 
-	// p99 catches sparse injected delays (e.g. intl shipping 10s) that mean latency dilutes.
+	// Fixed allowlisted PromQL against Astronomy Shop spanmetrics
+	// (traces_span_metrics_* from the OTEL demo collector).
 	latencyQ := fmt.Sprintf(
 		`histogram_quantile(0.99, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket[%s])))`,
 		winStr,
@@ -120,7 +140,7 @@ func (p *Prometheus) Collect(ctx context.Context, at time.Time) ([]detect.Sample
 			if !ok {
 				continue
 			}
-			id, err := astronomy.ServiceID(astronomy.LocalEnvironment, name)
+			id, err := astronomy.ServiceID(env, name)
 			if err != nil {
 				return err
 			}
@@ -161,7 +181,7 @@ func (p *Prometheus) Collect(ctx context.Context, at time.Time) ([]detect.Sample
 		if !ok {
 			val = 0
 		}
-		id, err := astronomy.ServiceID(astronomy.LocalEnvironment, name)
+		id, err := astronomy.ServiceID(env, name)
 		if err != nil {
 			return nil, err
 		}
@@ -190,18 +210,25 @@ func (p *Prometheus) query(ctx context.Context, promQL string) (map[string]float
 	q.Set("query", promQL)
 	u.RawQuery = q.Encode()
 
+	client := p.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: defaultHTTPTimeout}
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := p.HTTPClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("telem: prometheus query: %w", err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxPromResponseBytes+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(body) > maxPromResponseBytes {
+		return nil, fmt.Errorf("telem: prometheus response exceeds %d bytes", maxPromResponseBytes)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("telem: prometheus status %d: %s", resp.StatusCode, truncate(string(body), 200))
@@ -213,6 +240,13 @@ func (p *Prometheus) query(ctx context.Context, promQL string) (map[string]float
 	if pr.Status != "success" {
 		return nil, fmt.Errorf("telem: prometheus error: %s", pr.Error)
 	}
+	maxSeries := p.MaxSeries
+	if maxSeries <= 0 {
+		maxSeries = defaultMaxSeries
+	}
+	if len(pr.Data.Result) > maxSeries {
+		return nil, fmt.Errorf("telem: prometheus cardinality %d exceeds max %d", len(pr.Data.Result), maxSeries)
+	}
 	out := map[string]float64{}
 	for _, r := range pr.Data.Result {
 		name := r.Metric["service_name"]
@@ -221,6 +255,27 @@ func (p *Prometheus) query(ctx context.Context, promQL string) (map[string]float
 		}
 		if len(r.Value) < 2 {
 			continue
+		}
+		// Prometheus instant vector: [timestamp_seconds, "value_string"]
+		tsRaw := r.Value[0]
+		switch v := tsRaw.(type) {
+		case float64:
+			if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+				continue
+			}
+		case json.Number:
+			f, err := v.Float64()
+			if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+				continue
+			}
+		case string:
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
+				continue
+			}
+		default:
+			// Accept missing/odd timestamp encodings only when value parses;
+			// sample ObservedAt comes from the Collect clock, not Prom ts.
 		}
 		raw, ok := r.Value[1].(string)
 		if !ok {
