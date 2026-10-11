@@ -1,0 +1,97 @@
+{
+  "schema_version": "pulse.api.run.v1",
+  "generated_at": "2026-10-10T12:00:30Z",
+  "limitations": [
+    "FIXTURE: deterministic UI test payload — not live telemetry.",
+    "graph_nodes intentionally match web/fixtures/graph.ok.json node names."
+  ],
+  "run": {
+    "id": "run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "workflow_id": "astronomy.recommendations-browse.v1",
+    "display_name": "Recommendations Browse",
+    "environment": "astronomy-shop/local",
+    "status": "completed",
+    "phase": "done",
+    "started_at": "2026-10-10T12:00:00Z",
+    "ended_at": "2026-10-10T12:00:25Z",
+    "warnings": [],
+    "limitations": [],
+    "request": {
+      "method": "GET",
+      "url_redacted": "http://127.0.0.1:8080/api/recommendations?productIds=OLJCESPC7Z",
+      "status_code": 200,
+      "elapsed_ms": 42.5,
+      "attempts": 1,
+      "ok": true,
+      "marker": "perch-run-pulse/run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "trace": {
+      "trace_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "span_count": 8,
+      "subgraph_span_count": 6,
+      "has_cross_service_edge": true,
+      "trace_duration_ms": 18.5,
+      "observed_services": ["frontend", "recommendation"],
+      "app_services": ["frontend", "recommendation"],
+      "services": [
+        {
+          "otel_service_name": "frontend",
+          "span_count": 3,
+          "longest_span_duration_ms": 12.0,
+          "min_span_duration_ms": 1.0,
+          "max_span_duration_ms": 12.0,
+          "error_span_count": 0,
+          "has_error": false
+        },
+        {
+          "otel_service_name": "recommendation",
+          "span_count": 3,
+          "longest_span_duration_ms": 9.5,
+          "min_span_duration_ms": 1.5,
+          "max_span_duration_ms": 9.5,
+          "error_span_count": 1,
+          "has_error": true
+        }
+      ],
+      "spans": [],
+      "cross_service_edges": [
+        {
+          "parent_service": "frontend",
+          "child_service": "recommendation",
+          "parent_span_id": "1111111111111111",
+          "child_span_id": "2222222222222222"
+        }
+      ],
+      "warnings": []
+    },
+    "services": [
+      {
+        "otel_service_name": "frontend",
+        "pulse_service_id": "astronomy/local/frontend",
+        "graph_node": "web",
+        "mapping_source": "test_fixture",
+        "mapped": true,
+        "has_error": false,
+        "participation": "observed"
+      },
+      {
+        "otel_service_name": "recommendation",
+        "pulse_service_id": "astronomy/local/recommendation",
+        "graph_node": "api",
+        "mapping_source": "test_fixture",
+        "mapped": true,
+        "has_error": true,
+        "participation": "observed"
+      },
+      {
+        "otel_service_name": "mystery-svc",
+        "mapped": false,
+        "has_error": false,
+        "participation": "observed"
+      }
+    ],
+    "unmapped_services": ["mystery-svc"],
+    "graph_nodes": ["api", "web"],
+    "graph_nodes_with_errors": ["api"]
+  }
+}

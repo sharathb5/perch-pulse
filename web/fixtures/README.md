@@ -8,6 +8,8 @@ JSON payloads shaped like live viz APIs for Vitest and Playwright.
 | `pulse.services.*.json` | `/api/pulse/services` |
 | `pulse.incidents.*.json` / `pulse.incident.detail.json` | `/api/pulse/incidents` |
 | `pulse.changes*.json` | `/api/pulse/changes` |
+| `pulse.workflows.*.json` | `/api/pulse/workflows` (Run Pulse catalog) |
+| `pulse.run.*.json` | `/api/pulse/runs` create/get (on-demand diagnostic; labeled fixtures, not live) |
 | `pulse.pipeline.contract.json` | Golden envelope from Go INTEGRATION pipeline (`internal/pulse/pipeline`) |
 
 Regenerate pipeline contract (from repo root):

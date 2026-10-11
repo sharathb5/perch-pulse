@@ -11,10 +11,12 @@ import { usePerchData } from '../hooks/usePerchData.js'
 import { usePulseData } from '../hooks/usePulseData.js'
 import {
   decodeIncidentId,
+  decodeRunId,
   enrichServicePulse,
   normalizePulseTab,
   pulseStackPath,
 } from '../lib/pulse.js'
+import { RunPulseHighlightProvider } from '../lib/runPulseHighlight.jsx'
 
 /**
  * Panel coordination (Milestone C / ADR-017):
@@ -32,7 +34,8 @@ export function StackView() {
 
   const pulseTab = normalizePulseTab(searchParams.get('pulse'))
   const incidentId = decodeIncidentId(searchParams.get('incident'))
-  const pulseOpen = pulseTab != null || incidentId !== ''
+  const runId = decodeRunId(searchParams.get('run'))
+  const pulseOpen = pulseTab != null || incidentId !== '' || runId !== ''
 
   const { nodes: flowNodes, edges: flowEdges, appName, error, refetch: refetchGraph } = usePerchData(environment)
   const {
@@ -54,30 +57,63 @@ export function StackView() {
   const stackTitle = (appName && appName.trim() !== '' ? appName : stackName) ?? ''
   const graphDemo = error != null && error !== ''
 
+  const [runHighlight, setRunHighlight] = useState({
+    enabled: false,
+    graphNodes: [],
+    errorNodes: [],
+  })
+  // Cleared highlights are scoped to a run id — changing runId auto-resets.
+  const [clearedForRunId, setClearedForRunId] = useState('')
+  const highlightsCleared = Boolean(runId) && clearedForRunId === runId
+
+  const onRunHighlightsChange = useCallback((state) => {
+    setRunHighlight(state)
+  }, [])
+
+  const onClearRunHighlights = useCallback(() => {
+    if (runId) {
+      setClearedForRunId(runId)
+    }
+    setRunHighlight((prev) => ({ ...prev, enabled: false }))
+  }, [runId])
+
   const nodesWithPulse = useMemo(() => {
     // Never join Pulse onto demo/last-known mock topology — IDs may collide with real graph_node values.
-    if (graphDemo) {
-      return flowNodes
-    }
+    const showRun =
+      !graphDemo &&
+      Boolean(runId) &&
+      runHighlight.enabled &&
+      !highlightsCleared &&
+      Array.isArray(runHighlight.graphNodes)
+    const participated = new Set(showRun ? runHighlight.graphNodes : [])
+    const errored = new Set(showRun ? runHighlight.errorNodes : [])
+
     return flowNodes.map((n) => {
-      const pulse = getForNode(n.id)
-      if (!pulse) {
+      const pulse = !graphDemo ? getForNode(n.id) : null
+      const enriched = pulse
+        ? enrichServicePulse(pulse, pulse.relatedIncidents ?? [], {
+            expectedEnvironment: environment,
+          })
+        : null
+      let runPulse = null
+      if (participated.has(n.id)) {
+        runPulse = { participation: errored.has(n.id) ? 'error' : 'observed' }
+      }
+      if (!enriched && !runPulse) {
         return n
       }
-      const enriched = enrichServicePulse(pulse, pulse.relatedIncidents ?? [], {
-        expectedEnvironment: environment,
-      })
       return {
         ...n,
         data: {
           ...n.data,
           // Probe status from /api/status must remain the StatusPill source.
           status: n.data.status,
-          pulse: enriched,
+          ...(enriched ? { pulse: enriched } : {}),
+          ...(runPulse ? { runPulse } : { runPulse: null }),
         },
       }
     })
-  }, [flowNodes, getForNode, environment, graphDemo])
+  }, [flowNodes, getForNode, environment, graphDemo, runHighlight, highlightsCleared, runId])
 
   const node = useMemo(() => {
     const fromFlow = nodesWithPulse.find((n) => n.id === nodeId)?.data
@@ -108,9 +144,10 @@ export function StackView() {
         nodeId,
         pulseTab: pulseTab || 'overview',
         incidentId: incidentId || null,
+        runId: runId || null,
       }),
     )
-  }, [navigate, stackName, nodeId, pulseTab, incidentId])
+  }, [navigate, stackName, nodeId, pulseTab, incidentId, runId])
 
   useEffect(() => {
     const onKey = (e) => {
@@ -122,11 +159,29 @@ export function StackView() {
               nodeId,
               pulseTab: pulseTab || 'incidents',
               incidentId: null,
+              runId: runId || null,
             }),
           )
           return
         }
-        navigate(pulseStackPath(stackName, { nodeId, pulseTab: null, incidentId: null }))
+        if (runId) {
+          navigate(
+            pulseStackPath(stackName, {
+              nodeId,
+              pulseTab: pulseTab || 'run',
+              runId: null,
+            }),
+          )
+          return
+        }
+        navigate(
+          pulseStackPath(stackName, {
+            nodeId,
+            pulseTab: null,
+            incidentId: null,
+            runId: null,
+          }),
+        )
         return
       }
       if (nodeId) {
@@ -135,9 +190,28 @@ export function StackView() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [pulseOpen, incidentId, navigate, stackName, nodeId, pulseTab])
+  }, [pulseOpen, incidentId, runId, navigate, stackName, nodeId, pulseTab])
 
   const showBanner = error != null && error !== '' && error !== dismissedError
+
+  const runParticipated = useMemo(() => {
+    const show =
+      !graphDemo &&
+      Boolean(runId) &&
+      runHighlight.enabled &&
+      !highlightsCleared &&
+      Array.isArray(runHighlight.graphNodes)
+    return new Set(show ? runHighlight.graphNodes : [])
+  }, [graphDemo, runHighlight, highlightsCleared, runId])
+  const runErrored = useMemo(() => {
+    const show =
+      !graphDemo &&
+      Boolean(runId) &&
+      runHighlight.enabled &&
+      !highlightsCleared &&
+      Array.isArray(runHighlight.errorNodes)
+    return new Set(show ? runHighlight.errorNodes : [])
+  }, [graphDemo, runHighlight, highlightsCleared, runId])
 
   return (
     <div className="flex h-screen flex-col bg-white">
@@ -167,16 +241,18 @@ export function StackView() {
       />
 
       <div className="flex min-h-0 w-full flex-1">
-        <ReactFlowProvider>
-          <div className="min-h-0 min-w-0 flex-1">
-            <PerchGraph
-              selectedNodeId={nodeId}
-              nodes={nodesWithPulse}
-              edges={flowEdges}
-              layoutResetKey={environment}
-            />
-          </div>
-        </ReactFlowProvider>
+        <RunPulseHighlightProvider participated={runParticipated} errored={runErrored}>
+          <ReactFlowProvider>
+            <div className="min-h-0 min-w-0 flex-1">
+              <PerchGraph
+                selectedNodeId={nodeId}
+                nodes={nodesWithPulse}
+                edges={flowEdges}
+                layoutResetKey={environment}
+              />
+            </div>
+          </ReactFlowProvider>
+        </RunPulseHighlightProvider>
 
         {nodeId != null && nodeId !== '' && (
           <DetailPanel
@@ -194,8 +270,9 @@ export function StackView() {
 
         <PulseSidebar
           open={pulseOpen}
-          tab={pulseTab || (incidentId ? 'incidents' : 'overview')}
+          tab={pulseTab || (incidentId ? 'incidents' : runId ? 'run' : 'overview')}
           incidentId={incidentId}
+          runId={runId}
           overview={overview}
           incidents={incidents}
           changes={changes}
@@ -207,6 +284,10 @@ export function StackView() {
           dataSources={pulseDataSources}
           graphNodeByServiceId={graphNodeByServiceId}
           graphDemo={graphDemo}
+          onRunHighlightsChange={onRunHighlightsChange}
+          runHighlightsEnabled={runHighlight.enabled && !highlightsCleared}
+          runHighlightsCleared={highlightsCleared}
+          onClearRunHighlights={onClearRunHighlights}
         />
       </div>
     </div>

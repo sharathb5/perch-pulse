@@ -33,6 +33,17 @@ export PERCH_ASTRONOMY_DEMO_DIR=/path/to/opentelemetry-demo
 | `scripts/ci-smoke.sh` | GHA live smoke wrapper (includes multi-service trace probe) |
 | `cmd/trace-smoke` | Bounded recommendations-browse → Jaeger same-trace qualifier |
 | `perch.yaml` | Optional Perch graph for localhost / Docker health |
+
+## Run Pulse (Perch UI)
+
+With the demo up, start viz with an explicit loopback demo base (see [`docs/pulse-run.md`](../../docs/pulse-run.md)):
+
+```bash
+PERCH_RUN_PULSE_DEMO_BASE_URL=http://127.0.0.1:8080 \
+  perch viz --env local --port 3131
+```
+
+Open Pulse → **Run** → Recommendations Browse. Qualification reuses `internal/pulse/astronomy/tracesmoke` (same library as `cmd/trace-smoke`).
 | `.demo/` | Gitignored clone (default) |
 
 ## Modes

@@ -16,6 +16,7 @@ import {
   sortChangesDeterministic,
   sortIncidentsDeterministic,
 } from '../lib/pulse.js'
+import { PulseRunPanel } from './PulseRunPanel.jsx'
 
 /**
  * Dedicated Pulse investigation sidebar (Milestone C).
@@ -36,6 +37,11 @@ import {
  *   dataSources?: object | null,
  *   graphNodeByServiceId?: Map<string, string>,
  *   graphDemo?: boolean,
+ *   runId?: string,
+ *   onRunHighlightsChange?: (state: object) => void,
+ *   runHighlightsEnabled?: boolean,
+ *   runHighlightsCleared?: boolean,
+ *   onClearRunHighlights?: () => void,
  * }} props
  */
 export function PulseSidebar({
@@ -53,6 +59,11 @@ export function PulseSidebar({
   dataSources = null,
   graphNodeByServiceId = new Map(),
   graphDemo = false,
+  runId = '',
+  onRunHighlightsChange,
+  runHighlightsEnabled = true,
+  runHighlightsCleared = false,
+  onClearRunHighlights,
 }) {
   const { stackName, nodeId } = useParams()
   const navigate = useNavigate()
@@ -64,6 +75,7 @@ export function PulseSidebar({
         nodeId,
         pulseTab: null,
         incidentId: null,
+        runId: null,
       }),
     )
   }
@@ -73,7 +85,10 @@ export function PulseSidebar({
       pulseStackPath(stackName, {
         nodeId,
         pulseTab: next,
+        // Incident deep-links are incidents-tab scoped; run ids persist so graph
+        // highlights remain while browsing Overview/Incidents/Changes.
         incidentId: next === PULSE_TAB.INCIDENTS ? incidentId : null,
+        runId: runId || null,
       }),
     )
   }
@@ -113,6 +128,7 @@ export function PulseSidebar({
           { id: PULSE_TAB.OVERVIEW, label: 'Overview' },
           { id: PULSE_TAB.INCIDENTS, label: 'Incidents' },
           { id: PULSE_TAB.CHANGES, label: 'Changes' },
+          { id: PULSE_TAB.RUN, label: 'Run' },
         ].map((t) => (
           <button
             key={t.id}
@@ -183,6 +199,15 @@ export function PulseSidebar({
             graphNodeByServiceId={graphNodeByServiceId}
             stackName={stackName}
             nodeId={nodeId}
+          />
+        )}
+        {activeTab === PULSE_TAB.RUN && (
+          <PulseRunPanel
+            runId={runId}
+            onHighlightsChange={onRunHighlightsChange}
+            highlightsEnabled={runHighlightsEnabled}
+            highlightsCleared={runHighlightsCleared}
+            onClearHighlights={onClearRunHighlights}
           />
         )}
       </div>

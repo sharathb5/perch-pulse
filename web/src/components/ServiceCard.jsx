@@ -1,7 +1,8 @@
 import { Handle, Position } from '@xyflow/react'
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { decodeIncidentId, normalizePulseTab, pulseStackPath } from '../lib/pulse.js'
+import { decodeIncidentId, decodeRunId, normalizePulseTab, pulseStackPath } from '../lib/pulse.js'
+import { useRunPulseHighlight } from '../lib/useRunPulseHighlight.js'
 import { buildErrorPrompt, isErroredNode, openInAIWithFallback } from '../lib/aiHandoff.js'
 import { ProviderBadge } from './ProviderBadge.jsx'
 import { PulseIndicator } from './PulseIndicator.jsx'
@@ -30,6 +31,8 @@ export function ServiceCard({ data, selected }) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const id = data.id
+  // Context survives React Flow internal node memoization when clearing highlights.
+  const runPulseFromCtx = useRunPulseHighlight(id)
 
   const go = () => {
     navigate(
@@ -37,11 +40,23 @@ export function ServiceCard({ data, selected }) {
         nodeId: id,
         pulseTab: normalizePulseTab(searchParams.get('pulse')),
         incidentId: decodeIncidentId(searchParams.get('incident')) || null,
+        runId: decodeRunId(searchParams.get('run')) || null,
       }),
     )
   }
 
-  const ring = selected ? 'border-gray-400 ring-2 ring-gray-200' : 'border-gray-200'
+  const runPulseKind = runPulseFromCtx || data.runPulse?.participation || ''
+  // Selection ring vs Run Pulse participation (does not alter StatusPill / probe health).
+  let ring = selected ? 'border-gray-400 ring-2 ring-gray-200' : 'border-gray-200'
+  if (runPulseKind === 'error') {
+    ring = selected
+      ? 'border-amber-500 ring-2 ring-amber-200'
+      : 'border-amber-500 ring-2 ring-amber-100'
+  } else if (runPulseKind === 'observed') {
+    ring = selected
+      ? 'border-amber-400 ring-2 ring-amber-100'
+      : 'border-amber-300 ring-1 ring-amber-50'
+  }
   const showAIActions = isErroredNode(data)
   const [openInMenuOpen, setOpenInMenuOpen] = useState(false)
 
@@ -57,7 +72,11 @@ export function ServiceCard({ data, selected }) {
   }
 
   return (
-    <div data-testid={`service-node-${id}`} className="relative w-[210px] max-w-[210px]">
+    <div
+      data-testid={`service-node-${id}`}
+      data-run-pulse={runPulseKind || undefined}
+      className="relative w-[210px] max-w-[210px]"
+    >
       <Handle type="target" position={Position.Left} className="h-2 w-2 border-0 bg-transparent opacity-0" />
       <Handle type="source" position={Position.Right} className="h-2 w-2 border-0 bg-transparent opacity-0" />
 

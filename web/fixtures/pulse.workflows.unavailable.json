@@ -1,0 +1,26 @@
+{
+  "schema_version": "pulse.api.workflows.v1",
+  "generated_at": "2026-10-10T12:00:00Z",
+  "limitations": [
+    "Allowlisted workflows only — clients cannot supply arbitrary URLs.",
+    "MVP supports the local Astronomy Shop recommendations-browse diagnostic."
+  ],
+  "count": 1,
+  "workflows": [
+    {
+      "id": "astronomy.recommendations-browse.v1",
+      "display_name": "Recommendations Browse",
+      "description": "Safe read-only GET /api/recommendations against the local Astronomy Shop demo.",
+      "environment": "astronomy-shop/local",
+      "supported_signals": ["http_request", "distributed_trace", "service_identity_mapping"],
+      "available": false,
+      "unavailability_reason": "Astronomy Shop demo endpoint not configured. Set PERCH_RUN_PULSE_DEMO_BASE_URL to a loopback URL (e.g. http://127.0.0.1:8080).",
+      "http_method": "GET",
+      "request_summary": "GET /api/recommendations?productIds=OLJCESPC7Z (read-only)",
+      "telemetry_backend": "jaeger",
+      "expected_app_services": ["frontend", "recommendation", "product-catalog"],
+      "max_concurrent": 1,
+      "overall_timeout_secs": 90
+    }
+  ]
+}

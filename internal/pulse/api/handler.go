@@ -10,14 +10,18 @@ import (
 	"github.com/yashg4509/perch/internal/pulse/change"
 	"github.com/yashg4509/perch/internal/pulse/correlate"
 	"github.com/yashg4509/perch/internal/pulse/incident"
+	"github.com/yashg4509/perch/internal/pulse/runpulse"
 )
 
-// Handler serves read-only Pulse JSON on the existing viz mux.
+// Handler serves Pulse JSON on the existing viz mux.
+// Historical Pulse routes remain GET-only; Run Pulse adds allowlisted POST /api/pulse/runs.
 type Handler struct {
 	Reader *Reader
+	// Runs is optional; when nil, workflow/run endpoints return 503.
+	Runs *runpulse.Engine
 }
 
-// Register mounts Pulse routes on mux. Only GET is registered.
+// Register mounts Pulse routes on mux.
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/pulse/services", h.handleServices)
 	mux.HandleFunc("GET /api/pulse/incidents", h.handleIncidents)
@@ -25,6 +29,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/pulse/incidents/{id...}", h.handleIncidentDetail)
 	mux.HandleFunc("GET /api/pulse/changes", h.handleChanges)
 	mux.HandleFunc("GET /api/pulse/changes/{id...}", h.handleChangeDetail)
+	h.registerRunRoutes(mux)
 }
 
 func (h *Handler) handleServices(w http.ResponseWriter, r *http.Request) {

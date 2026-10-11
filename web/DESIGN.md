@@ -25,7 +25,7 @@ If docs and screenshots diverge, trust the code + baselines and update this file
 | Unit tests | Vitest (`web/src/**/*.test.js`) |
 | Browser tests | Playwright (see `web/UI_VERIFICATION.md`) |
 
-Serving: Go `perch viz` binds loopback and serves `web/dist` plus `/api/graph`, `/api/status`, `/api/logs`, `/api/credentials`, and Milestone A `/api/pulse/*`.
+Serving: Go `perch viz` binds loopback and serves `web/dist` plus `/api/graph`, `/api/status`, `/api/logs`, `/api/credentials`, and `/api/pulse/*` (historical GET intelligence + Milestone E Run Pulse workflows/runs).
 
 ---
 
@@ -167,6 +167,8 @@ Navbar brand is static text “perch”; stack title comes from graph `appName` 
 Active probe health (`/api/status`) is separate from Pulse intelligence (`/api/pulse/*`).
 
 **Pulse overlay (Milestone B):** `PulseIndicator` on `ServiceCard` and `PulseSection` in the detail panel consume `/api/pulse/services` (+ incidents when needed). Join is via backend `graph_node` only. Kinds: `open` / `historical` / `stale` / `unavailable` / `unknown`. Recovered incidents use a historical (slate) indicator — never force probe `StatusPill` red/green. `process_memory_unavailable` is shown as unavailable/unknown, never healthy. Incident deep-link: `?incident=<url-encoded-id>` on the existing `/stack/:stackName/:nodeId` route.
+
+**Run Pulse (Milestone E):** Pulse sidebar tab `?pulse=run` (+ optional `?run=<run_id>`). On-demand allowlisted diagnostic — distinct from historical incidents and StatusPill. Completed runs may amber-highlight **observed** graph nodes (`data-run-pulse=observed|error`); clearing highlights does not alter probe health or incident overlays. See [`docs/pulse-run.md`](../docs/pulse-run.md).
 
 ---
 

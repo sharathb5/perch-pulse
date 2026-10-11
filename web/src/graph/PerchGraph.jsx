@@ -10,7 +10,7 @@ import {
   useReactFlow,
 } from '@xyflow/react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { decodeIncidentId, normalizePulseTab, pulseStackPath } from '../lib/pulse.js'
+import { decodeIncidentId, decodeRunId, normalizePulseTab, pulseStackPath } from '../lib/pulse.js'
 import { ServiceCard } from '../components/ServiceCard.jsx'
 import { mockEdges, mockNodes } from '../data/mock.js'
 import { getLayoutedElements, NODE_HEIGHT, NODE_WIDTH, separateOverlappingNodes } from './layout.js'
@@ -114,6 +114,7 @@ export function PerchGraph({ selectedNodeId, nodes: nodesProp, edges: edgesProp,
           nodeId: node.id,
           pulseTab: normalizePulseTab(searchParams.get('pulse')),
           incidentId: decodeIncidentId(searchParams.get('incident')) || null,
+          runId: decodeRunId(searchParams.get('run')) || null,
         }),
       )
     },

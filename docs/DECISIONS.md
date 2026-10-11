@@ -28,6 +28,29 @@ Rules:
 
 ---
 
+## ADR-020: Run Pulse on-demand diagnostics (Milestone E)
+
+**Date:** 2026-10-11  
+**Status:** Accepted  
+**Issue:** #25 (parent #17)
+
+**Context:** Issue #25 needs a user-triggered diagnostic that reuses Astronomy Shop multi-service trace qualification without becoming an arbitrary HTTP client, continuous monitor, or incident detector. Viz already binds loopback; historical Pulse APIs are GET-only.
+
+**Decision:**
+1. Add server-side allowlisted workflow `astronomy.recommendations-browse.v1` only; clients send `workflow_id`, never URLs/methods/headers.
+2. Require explicit `PERCH_RUN_PULSE_DEMO_BASE_URL` (optional Jaeger base) validated as http(s) **loopback** with DNS checks; diagnostic HTTP client disables redirects.
+3. Execute asynchronously in `internal/pulse/runpulse` with bounded concurrency (1), timeouts, probe/poll counts, in-memory retention (20 / 30m); state machine `pending|running|completed|failed|timed_out`.
+4. Reuse `internal/pulse/astronomy/tracesmoke` for probe/Jaeger client helpers, qualification, and bounded evidence (authoritative with CI smoke).
+5. Mount `GET /api/pulse/workflows`, `POST /api/pulse/runs` (loopback + reject `X-Forwarded-For`), `GET /api/pulse/runs/{id}` on existing viz mux without breaking historical Pulse routes.
+6. UI: Pulse sidebar **Run** tab (`?pulse=run&run=`), amber participation highlights from **observed** graph nodes only; never overwrite StatusPill or historical incidents.
+7. `completed` requires trace qualification success — not HTTP 200 alone.
+
+**Consequences:** Demo-only MVP; unavailable without config; runs lost on viz restart (documented). Future workflows must extend the allowlist the same way. Remotely exposed viz without auth must not enable POST runs without a new ADR.
+
+**Alternatives considered:** Browser-supplied URLs (rejected: SSRF); Redis/job framework (rejected: MVP scope); auto-scheduling (rejected: on-demand only); inventing critical-path inference (rejected: evidence-first).
+
+---
+
 ## ADR-019: Astronomy smoke requires same-trace multi-service evidence
 
 **Date:** 2026-10-11  

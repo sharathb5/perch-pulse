@@ -9,12 +9,25 @@ export const PULSE_SCHEMA_INCIDENT = 'pulse.api.incident.v1'
 export const PULSE_SCHEMA_CHANGES = 'pulse.api.changes.v1'
 export const PULSE_SCHEMA_CHANGE = 'pulse.api.change.v1'
 export const PULSE_SCHEMA_CORRELATION = 'pulse.correlation.v1'
+export const PULSE_SCHEMA_WORKFLOWS = 'pulse.api.workflows.v1'
+export const PULSE_SCHEMA_RUN = 'pulse.api.run.v1'
+export const PULSE_SCHEMA_RUN_CREATE = 'pulse.api.runs.create.v1'
 
 /** Sidebar tabs (URL `pulse` query value). */
 export const PULSE_TAB = Object.freeze({
   OVERVIEW: 'overview',
   INCIDENTS: 'incidents',
   CHANGES: 'changes',
+  RUN: 'run',
+})
+
+/** Run Pulse diagnostic statuses (backend state machine). */
+export const RUN_STATUS = Object.freeze({
+  PENDING: 'pending',
+  RUNNING: 'running',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  TIMED_OUT: 'timed_out',
 })
 
 /** Persisted incident state labels — never imply live outage without fresh telemetry. */
@@ -102,13 +115,14 @@ export function pulseIncidentPath(stackName, nodeId, incidentId) {
 
 /**
  * Build a stack path with optional node + Pulse sidebar query state.
- * Closing the sidebar omits `pulse` / `incident` but preserves `nodeId`.
+ * Closing the sidebar omits `pulse` / `incident` / `run` but preserves `nodeId`.
  *
  * @param {string} stackName
  * @param {{
  *   nodeId?: string | null,
  *   pulseTab?: string | null,
  *   incidentId?: string | null,
+ *   runId?: string | null,
  * }} [opts]
  */
 export function pulseStackPath(stackName, opts = {}) {
@@ -129,6 +143,12 @@ export function pulseStackPath(stackName, opts = {}) {
       qs.set('pulse', PULSE_TAB.INCIDENTS)
     }
   }
+  if (opts.runId != null && String(opts.runId).trim() !== '') {
+    qs.set('run', String(opts.runId))
+    if (!tab) {
+      qs.set('pulse', PULSE_TAB.RUN)
+    }
+  }
   const q = qs.toString()
   return q ? `${base}?${q}` : base
 }
@@ -142,10 +162,34 @@ export function normalizePulseTab(raw) {
   if (v === '1' || v === 'true' || v === 'open') {
     return PULSE_TAB.OVERVIEW
   }
-  if (v === PULSE_TAB.OVERVIEW || v === PULSE_TAB.INCIDENTS || v === PULSE_TAB.CHANGES) {
+  if (
+    v === PULSE_TAB.OVERVIEW ||
+    v === PULSE_TAB.INCIDENTS ||
+    v === PULSE_TAB.CHANGES ||
+    v === PULSE_TAB.RUN
+  ) {
     return v
   }
   return null
+}
+
+/**
+ * Decode a URL run id. Returns '' if invalid.
+ * @param {string | null | undefined} raw
+ */
+export function decodeRunId(raw) {
+  if (raw == null || String(raw).trim() === '') {
+    return ''
+  }
+  try {
+    const id = decodeURIComponent(String(raw)).trim()
+    if (!/^run_[a-fA-F0-9]+$/.test(id)) {
+      return ''
+    }
+    return id
+  } catch {
+    return ''
+  }
 }
 
 /**
@@ -173,6 +217,249 @@ export function pulseIncidentApiPath(incidentId) {
  */
 export function pulseChangesListApiPath(limit = 100) {
   return `/api/pulse/changes?limit=${encodeURIComponent(String(limit))}`
+}
+
+/** @returns {string} */
+export function pulseWorkflowsApiPath() {
+  return '/api/pulse/workflows'
+}
+
+/** @returns {string} */
+export function pulseRunsApiPath() {
+  return '/api/pulse/runs'
+}
+
+/**
+ * @param {string} runId
+ * @returns {string}
+ */
+export function pulseRunApiPath(runId) {
+  return `/api/pulse/runs/${encodeURIComponent(String(runId ?? ''))}`
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{ ok: true, response: object } | { ok: false, error: string }}
+ */
+export function parseWorkflowsResponse(raw) {
+  if (raw == null || typeof raw !== 'object') {
+    return { ok: false, error: 'Pulse workflows response missing' }
+  }
+  if (containsGroundTruthLeak(raw)) {
+    return { ok: false, error: 'Pulse workflows response rejected: ground-truth markers' }
+  }
+  const schema = String(raw.schema_version ?? '')
+  if (schema !== '' && schema !== PULSE_SCHEMA_WORKFLOWS) {
+    return { ok: false, error: `Unexpected Pulse workflows schema: ${schema}` }
+  }
+  const workflows = Array.isArray(raw.workflows) ? raw.workflows : []
+  return {
+    ok: true,
+    response: {
+      schemaVersion: schema || PULSE_SCHEMA_WORKFLOWS,
+      generatedAt: raw.generated_at ?? null,
+      limitations: Array.isArray(raw.limitations) ? raw.limitations.map(String) : [],
+      count: typeof raw.count === 'number' ? raw.count : workflows.length,
+      workflows: workflows.map(normalizeWorkflow).filter(Boolean),
+    },
+  }
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{ ok: true, response: object } | { ok: false, error: string }}
+ */
+export function parseRunResponse(raw) {
+  if (raw == null || typeof raw !== 'object') {
+    return { ok: false, error: 'Pulse run response missing' }
+  }
+  if (containsGroundTruthLeak(raw)) {
+    return { ok: false, error: 'Pulse run response rejected: ground-truth markers' }
+  }
+  const schema = String(raw.schema_version ?? '')
+  if (
+    schema !== '' &&
+    schema !== PULSE_SCHEMA_RUN &&
+    schema !== PULSE_SCHEMA_RUN_CREATE
+  ) {
+    return { ok: false, error: `Unexpected Pulse run schema: ${schema}` }
+  }
+  const run = normalizeRun(raw.run)
+  if (!run) {
+    return { ok: false, error: 'Pulse run payload missing run object' }
+  }
+  return {
+    ok: true,
+    response: {
+      schemaVersion: schema || PULSE_SCHEMA_RUN,
+      generatedAt: raw.generated_at ?? null,
+      limitations: Array.isArray(raw.limitations) ? raw.limitations.map(String) : [],
+      run,
+    },
+  }
+}
+
+/**
+ * @param {unknown} w
+ */
+function normalizeWorkflow(w) {
+  if (w == null || typeof w !== 'object') return null
+  const id = String(w.id ?? '').trim()
+  if (!id) return null
+  return {
+    id,
+    displayName: String(w.display_name ?? id),
+    description: String(w.description ?? ''),
+    environment: String(w.environment ?? ''),
+    supportedSignals: Array.isArray(w.supported_signals) ? w.supported_signals.map(String) : [],
+    available: Boolean(w.available),
+    unavailabilityReason: String(w.unavailability_reason ?? ''),
+    httpMethod: String(w.http_method ?? ''),
+    requestSummary: String(w.request_summary ?? ''),
+    telemetryBackend: String(w.telemetry_backend ?? ''),
+    expectedAppServices: Array.isArray(w.expected_app_services)
+      ? w.expected_app_services.map(String)
+      : [],
+    maxConcurrent: typeof w.max_concurrent === 'number' ? w.max_concurrent : 1,
+    overallTimeoutSecs:
+      typeof w.overall_timeout_secs === 'number' ? w.overall_timeout_secs : null,
+  }
+}
+
+/**
+ * @param {unknown} r
+ */
+function normalizeRun(r) {
+  if (r == null || typeof r !== 'object') return null
+  const id = String(r.id ?? '').trim()
+  if (!id) return null
+  const status = String(r.status ?? '')
+  return {
+    id,
+    workflowId: String(r.workflow_id ?? ''),
+    displayName: String(r.display_name ?? ''),
+    environment: String(r.environment ?? ''),
+    status,
+    phase: String(r.phase ?? ''),
+    startedAt: r.started_at ?? null,
+    endedAt: r.ended_at ?? null,
+    failureCode: String(r.failure_code ?? ''),
+    failureMessage: String(r.failure_message ?? ''),
+    warnings: Array.isArray(r.warnings) ? r.warnings.map(String) : [],
+    limitations: Array.isArray(r.limitations) ? r.limitations.map(String) : [],
+    request: r.request && typeof r.request === 'object' ? {
+      method: String(r.request.method ?? ''),
+      urlRedacted: String(r.request.url_redacted ?? ''),
+      statusCode: typeof r.request.status_code === 'number' ? r.request.status_code : null,
+      elapsedMs: typeof r.request.elapsed_ms === 'number' ? r.request.elapsed_ms : null,
+      attempts: typeof r.request.attempts === 'number' ? r.request.attempts : null,
+      ok: Boolean(r.request.ok),
+      error: String(r.request.error ?? ''),
+      marker: String(r.request.marker ?? ''),
+    } : null,
+    trace: r.trace && typeof r.trace === 'object' ? {
+      traceId: String(r.trace.trace_id ?? ''),
+      spanCount: typeof r.trace.span_count === 'number' ? r.trace.span_count : 0,
+      subgraphSpanCount:
+        typeof r.trace.subgraph_span_count === 'number' ? r.trace.subgraph_span_count : 0,
+      hasCrossServiceEdge: Boolean(r.trace.has_cross_service_edge),
+      traceDurationMs:
+        typeof r.trace.trace_duration_ms === 'number' ? r.trace.trace_duration_ms : null,
+      observedServices: Array.isArray(r.trace.observed_services)
+        ? r.trace.observed_services.map(String)
+        : [],
+      appServices: Array.isArray(r.trace.app_services) ? r.trace.app_services.map(String) : [],
+      services: Array.isArray(r.trace.services)
+        ? r.trace.services.map((s) => ({
+            otelServiceName: String(s.otel_service_name ?? ''),
+            spanCount: typeof s.span_count === 'number' ? s.span_count : 0,
+            longestSpanDurationMs:
+              typeof s.longest_span_duration_ms === 'number' ? s.longest_span_duration_ms : null,
+            minSpanDurationMs:
+              typeof s.min_span_duration_ms === 'number' ? s.min_span_duration_ms : null,
+            maxSpanDurationMs:
+              typeof s.max_span_duration_ms === 'number' ? s.max_span_duration_ms : null,
+            errorSpanCount: typeof s.error_span_count === 'number' ? s.error_span_count : 0,
+            hasError: Boolean(s.has_error),
+          }))
+        : [],
+      spans: Array.isArray(r.trace.spans) ? r.trace.spans : [],
+      crossServiceEdges: Array.isArray(r.trace.cross_service_edges)
+        ? r.trace.cross_service_edges.map((e) => ({
+            parentService: String(e.parent_service ?? ''),
+            childService: String(e.child_service ?? ''),
+            parentSpanId: String(e.parent_span_id ?? ''),
+            childSpanId: String(e.child_span_id ?? ''),
+          }))
+        : [],
+      warnings: Array.isArray(r.trace.warnings) ? r.trace.warnings.map(String) : [],
+    } : null,
+    services: Array.isArray(r.services) ? r.services.map((s) => ({
+      otelServiceName: String(s.otel_service_name ?? ''),
+      pulseServiceId: String(s.pulse_service_id ?? ''),
+      graphNode: String(s.graph_node ?? ''),
+      mappingSource: String(s.mapping_source ?? ''),
+      mapped: Boolean(s.mapped),
+      hasError: Boolean(s.has_error),
+      participation: String(s.participation ?? 'observed'),
+    })) : [],
+    unmappedServices: Array.isArray(r.unmapped_services) ? r.unmapped_services.map(String) : [],
+    graphNodes: Array.isArray(r.graph_nodes) ? r.graph_nodes.map(String) : [],
+    graphNodesWithErrors: Array.isArray(r.graph_nodes_with_errors)
+      ? r.graph_nodes_with_errors.map(String)
+      : [],
+  }
+}
+
+/**
+ * Human-readable Run Pulse failure copy.
+ * @param {{ failureCode?: string, failureMessage?: string, status?: string }} run
+ */
+export function runFailureSummary(run) {
+  if (!run) return 'Diagnostic unavailable'
+  if (run.status === RUN_STATUS.TIMED_OUT) {
+    return run.failureMessage || 'Diagnostic timed out waiting for trace evidence'
+  }
+  const code = String(run.failureCode ?? '')
+  const msg = String(run.failureMessage ?? '')
+  const byCode = {
+    unsupported_workflow: 'This diagnostic workflow is not supported.',
+    workflow_unavailable: 'Astronomy Shop demo is not configured for Run Pulse.',
+    concurrency_limit: 'Another diagnostic is already running. Wait for it to finish.',
+    request_failed: 'The safe diagnostic HTTP request failed.',
+    telemetry_unreachable: 'Jaeger / telemetry backend is unreachable.',
+    trace_not_found: 'No marked multi-service trace was found.',
+    trace_incomplete: 'Trace evidence was incomplete (need cross-service proof).',
+    timed_out: 'Diagnostic timed out.',
+    cancelled: 'Diagnostic was cancelled.',
+    server_misconfigured: 'Run Pulse server configuration is invalid.',
+    not_found: 'Run not found (expired or lost after viz restart).',
+  }
+  if (byCode[code]) {
+    return msg ? `${byCode[code]} ${msg}` : byCode[code]
+  }
+  return msg || 'Diagnostic failed'
+}
+
+/**
+ * Phase label for running diagnostics — only stages the backend exposes.
+ * @param {string} phase
+ */
+export function runPhaseLabel(phase) {
+  switch (String(phase ?? '')) {
+    case 'sending_request':
+      return 'Sending diagnostic request'
+    case 'waiting_for_trace':
+      return 'Waiting for trace'
+    case 'mapping_services':
+      return 'Mapping services'
+    case 'queued':
+      return 'Queued'
+    case 'done':
+      return 'Finished'
+    default:
+      return 'Running diagnostic'
+  }
 }
 
 /**

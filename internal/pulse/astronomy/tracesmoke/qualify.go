@@ -103,7 +103,7 @@ func QualifyTrace(tr Trace, c Criteria) Result {
 		return res
 	}
 
-	seenSpanIDs := map[string]string{} // spanID -> processID
+	seenSpanIDs := map[string]struct{}{}
 	for _, span := range tr.Spans {
 		if span.TraceID == "" || span.TraceID != tr.TraceID {
 			res.Reason = fmt.Sprintf("span %q missing or mismatched traceID", span.SpanID)
@@ -113,11 +113,11 @@ func QualifyTrace(tr Trace, c Criteria) Result {
 			res.Reason = fmt.Sprintf("invalid spanID %q", span.SpanID)
 			return res
 		}
-		if prev, ok := seenSpanIDs[span.SpanID]; ok && prev != span.ProcessID {
-			res.Reason = fmt.Sprintf("duplicate spanID %q with conflicting process metadata", span.SpanID)
+		if _, ok := seenSpanIDs[span.SpanID]; ok {
+			res.Reason = fmt.Sprintf("duplicate spanID %q", span.SpanID)
 			return res
 		}
-		seenSpanIDs[span.SpanID] = span.ProcessID
+		seenSpanIDs[span.SpanID] = struct{}{}
 		for _, ref := range span.References {
 			if !strings.EqualFold(ref.RefType, "CHILD_OF") {
 				continue
