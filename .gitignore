@@ -18,6 +18,10 @@
 *.out
 coverage.out
 profile.cov
+# Accidental local builds of Astronomy smoke CLIs at repo root
+/run-pulse-api-smoke
+/trace-smoke
+/perch
 
 # Dependency directories
 vendor/

@@ -3,11 +3,16 @@
 # Not part of make verify. Prefer workflow_dispatch on a GitHub-hosted runner.
 #
 # Proves (when resources allow):
-#   stack readiness → perch.yaml graph → /api/graph+/api/status → bounded
-#   storefront GET → recommendations-browse synthetic traffic → same-trace
-#   multi-service Jaeger evidence → clean stop
+#   stack readiness → perch.yaml graph → /api/graph+/api/status →
+#   /api/pulse/workflows available → bounded storefront GET →
+#   recommendations-browse synthetic traffic (cmd/trace-smoke) → same-trace
+#   multi-service Jaeger evidence → REAL Run Pulse HTTP API
+#   (POST /api/pulse/runs + GET /api/pulse/runs/{id}) → clean stop
 #
 # Honesty: HTTP 200 alone is not success; missing multi-service trace evidence FAILs.
+# Both trace-smoke and Run Pulse API stages run against the same Astronomy Shop
+# stack: trace-smoke proves library-level Jaeger qualification; Run Pulse proves
+# the viz HTTP API initiates and returns the same class of diagnostic.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -31,10 +36,16 @@ note() { echo "NOTE: $*"; }
 mkdir -p "$ARTIFACT_DIR"
 START_TS=$SECONDS
 
+VIZ_PID=""
 cleanup() {
   local code=$?
   set +e
   echo "---- smoke cleanup (exit=$code) ----"
+  if [[ -n "${VIZ_PID}" ]]; then
+    kill "$VIZ_PID" 2>/dev/null || true
+    wait "$VIZ_PID" 2>/dev/null || true
+    VIZ_PID=""
+  fi
   if [[ -x "$SHOP/scripts/stop.sh" ]]; then
     timeout 180 "$SHOP/scripts/stop.sh" || warn "stop.sh returned nonzero"
   fi
@@ -100,12 +111,16 @@ fi
 grep -q '"nodes"' "$ARTIFACT_DIR/perch-status.json" || fail "status JSON missing nodes"
 ok "perch status JSON collected with nodes"
 
-# Start viz briefly and exercise HTTP handlers (not only CLI).
+# Start the real Go viz server with Run Pulse enabled (supported env config).
+# Same security model as normal execution: loopback allowlist, no CSRF bypass.
 VIZ_PORT="${ASTRONOMY_SMOKE_VIZ_PORT:-18765}"
 VIZ_LOG="$ARTIFACT_DIR/viz.log"
+export PERCH_RUN_PULSE_DEMO_BASE_URL="${PERCH_RUN_PULSE_DEMO_BASE_URL:-$BASE_URL}"
+export PERCH_RUN_PULSE_JAEGER_BASE="${PERCH_RUN_PULSE_JAEGER_BASE:-${ASTRONOMY_JAEGER_UI_BASE:-$BASE_URL/jaeger/ui}}"
+echo "PERCH_RUN_PULSE_DEMO_BASE_URL=$PERCH_RUN_PULSE_DEMO_BASE_URL" | tee "$ARTIFACT_DIR/run-pulse-env.txt"
+echo "PERCH_RUN_PULSE_JAEGER_BASE=$PERCH_RUN_PULSE_JAEGER_BASE" | tee -a "$ARTIFACT_DIR/run-pulse-env.txt"
 "$PERCH_BIN" viz --env local --port "$VIZ_PORT" >"$VIZ_LOG" 2>&1 &
 VIZ_PID=$!
-viz_down() { kill "$VIZ_PID" 2>/dev/null || true; wait "$VIZ_PID" 2>/dev/null || true; }
 viz_ok=0
 for _ in $(seq 1 40); do
   if curl -sf --max-time 2 "http://127.0.0.1:${VIZ_PORT}/api/graph?env=local" >"$ARTIFACT_DIR/api-graph.json"; then
@@ -115,15 +130,30 @@ for _ in $(seq 1 40); do
   sleep 0.25
 done
 if [[ "$viz_ok" -ne 1 ]]; then
-  viz_down
   fail "viz /api/graph did not become ready (see $VIZ_LOG)"
 fi
-grep -q '"shipping"' "$ARTIFACT_DIR/api-graph.json" || { viz_down; fail "/api/graph missing shipping"; }
+grep -q '"shipping"' "$ARTIFACT_DIR/api-graph.json" || fail "/api/graph missing shipping"
 curl -sf --max-time 30 "http://127.0.0.1:${VIZ_PORT}/api/status?env=local" >"$ARTIFACT_DIR/api-status.json" \
-  || { viz_down; fail "viz /api/status failed"; }
-grep -q '"nodes"' "$ARTIFACT_DIR/api-status.json" || { viz_down; fail "/api/status missing nodes"; }
+  || fail "viz /api/status failed"
+grep -q '"nodes"' "$ARTIFACT_DIR/api-status.json" || fail "/api/status missing nodes"
 ok "viz /api/graph and /api/status responded with nodes"
-viz_down
+
+echo "==== Run Pulse workflows catalog ===="
+curl -sf --max-time 15 "http://127.0.0.1:${VIZ_PORT}/api/pulse/workflows" >"$ARTIFACT_DIR/api-pulse-workflows.json" \
+  || fail "GET /api/pulse/workflows failed (is Run Pulse mounted? see $VIZ_LOG)"
+# Fail if the Astronomy workflow is missing or available=false (HTTP 200 alone is insufficient).
+if ! grep -q '"id":"astronomy.recommendations-browse.v1"' "$ARTIFACT_DIR/api-pulse-workflows.json" && \
+   ! grep -q '"id": "astronomy.recommendations-browse.v1"' "$ARTIFACT_DIR/api-pulse-workflows.json"; then
+  fail "workflow astronomy.recommendations-browse.v1 not listed in /api/pulse/workflows"
+fi
+if grep -q '"available": false' "$ARTIFACT_DIR/api-pulse-workflows.json" || grep -q '"available":false' "$ARTIFACT_DIR/api-pulse-workflows.json"; then
+  # Confirm it is our workflow that is unavailable (catalog has one entry in MVP).
+  fail "astronomy.recommendations-browse.v1 listed but unavailable — set PERCH_RUN_PULSE_DEMO_BASE_URL (see $ARTIFACT_DIR/api-pulse-workflows.json and run-pulse-env.txt)"
+fi
+if ! grep -q '"available": true' "$ARTIFACT_DIR/api-pulse-workflows.json" && ! grep -q '"available":true' "$ARTIFACT_DIR/api-pulse-workflows.json"; then
+  fail "workflow available=true not observed in /api/pulse/workflows"
+fi
+ok "GET /api/pulse/workflows lists astronomy.recommendations-browse.v1 as available"
 
 echo "==== bounded safe synthetic traffic (GET storefront) ===="
 # Storefront HTML reachability — client-side JS is NOT executed by curl, so this
@@ -169,11 +199,36 @@ TRACE_BIN="$ARTIFACT_DIR/trace-smoke"
   | tee "$ARTIFACT_DIR/trace-smoke.log"
 ok "multi-service Jaeger trace evidence collected for recommendations-browse"
 
+echo "==== required Run Pulse HTTP API smoke (POST/GET /api/pulse/runs) ===="
+# Same Astronomy Shop + viz process. Separate probe from trace-smoke on purpose:
+# this stage proves the real viz HTTP API starts the diagnostic and returns
+# qualified evidence — not a direct Go package / CLI substitute.
+note "Why a second recommendations probe: trace-smoke validates Jaeger qualification outside viz; Run Pulse validates POST/GET /api/pulse/runs through the mounted API (bounded; max 3 probe GETs inside the engine)."
+RUN_PULSE_BIN="$ARTIFACT_DIR/run-pulse-api-smoke"
+(cd "$ROOT" && go build -o "$RUN_PULSE_BIN" ./examples/astronomy-shop/cmd/run-pulse-api-smoke)
+"$RUN_PULSE_BIN" \
+  --viz-base-url "http://127.0.0.1:${VIZ_PORT}" \
+  --artifact-dir "$ARTIFACT_DIR" \
+  --graph-json "$ARTIFACT_DIR/api-graph.json" \
+  --workflow-id "astronomy.recommendations-browse.v1" \
+  --deadline-secs "${ASTRONOMY_RUN_PULSE_DEADLINE_SECS:-120}" \
+  --poll-secs "${ASTRONOMY_RUN_PULSE_POLL_SECS:-2}" \
+  --max-attempts "${ASTRONOMY_RUN_PULSE_MAX_ATTEMPTS:-60}" \
+  | tee "$ARTIFACT_DIR/run-pulse-api-smoke.log"
+ok "Run Pulse HTTP API returned completed diagnostic with qualified multi-service evidence"
+
 # Service mapping honesty: identity map is compose-name based (no fuzzy display names).
 MAP="$ROOT/internal/pulse/astronomy/service-mapping.yaml"
 grep -q 'shipping' "$MAP" || fail "service-mapping.yaml missing shipping"
 ok "Pulse astronomy mapping file present (compose names, not display-name fuzzy match)"
 
-note "Observed: frontend HTTP $TRAFFIC_CODE; graph nodes present; verify-live passed; multi-service trace qualified."
-note "Not claimed: checkout/payment/email path, fault injection, or Run Pulse UI (#25)."
+# Stop viz before compose teardown (cleanup also kills VIZ_PID if still set).
+if [[ -n "${VIZ_PID}" ]]; then
+  kill "$VIZ_PID" 2>/dev/null || true
+  wait "$VIZ_PID" 2>/dev/null || true
+  VIZ_PID=""
+fi
+
+note "Observed: frontend HTTP $TRAFFIC_CODE; graph/status/workflows OK; trace-smoke qualified; Run Pulse API completed with mapped services + cross-service edges."
+note "Not claimed: checkout/payment/email path, fault injection, continuous monitoring, or UI screenshot proof in this workflow."
 ok "Astronomy Shop CI smoke completed within runner budgets"

@@ -100,7 +100,14 @@ cd web && npm test && npm run test:e2e -- e2e/pulse-run.spec.js
 make verify
 ```
 
-Live Astronomy Shop + Run Pulse API validation is optional and must not be required on every PR (see Astronomy Smoke workflow_dispatch).
+Live Astronomy Shop + Run Pulse API validation is optional and must not be required on every PR (see Astronomy Smoke `workflow_dispatch`).
+
+The Astronomy Smoke workflow starts `perch viz` with `PERCH_RUN_PULSE_DEMO_BASE_URL`, then:
+
+1. `cmd/trace-smoke` — library-level Jaeger qualification (unchanged)
+2. `cmd/run-pulse-api-smoke` — real `POST /api/pulse/runs` + polled `GET /api/pulse/runs/{id}` with evidence assertions (`internal/pulse/runpulse/apismoke`)
+
+Both stages share one Astronomy Shop stack; the second probe exists to prove the HTTP API path, not to replace the first.
 
 ## Known limitations
 
