@@ -1,8 +1,10 @@
 package tracesmoke
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,10 +15,16 @@ import (
 
 const (
 	// MaxResponseBytes bounds Jaeger/API response bodies.
+	// Bodies larger than this are treated as truncated (not silently sliced).
 	MaxResponseBytes = 512 * 1024
 	// MaxProbeBodyBytes bounds probe response discard size.
 	MaxProbeBodyBytes = 64 * 1024
 )
+
+// ErrResponseTruncated reports that a Jaeger/API body exceeded MaxResponseBytes.
+// Callers should retry with a smaller query limit or treat the fetch as empty
+// for polling — not as a hard "malformed JSON" failure.
+var ErrResponseTruncated = errors.New("response truncated: exceeded MaxResponseBytes")
 
 // HTTPDoer is satisfied by *http.Client.
 type HTTPDoer interface {
@@ -59,6 +67,8 @@ func ProbeGET(ctx context.Context, client HTTPDoer, rawURL, marker string) Probe
 }
 
 // GetJSONBytes GETs a URL and returns a bounded body for 2xx responses.
+// If the body exceeds MaxResponseBytes, it returns ErrResponseTruncated rather
+// than a silently truncated buffer that would fail JSON parsing mid-document.
 func GetJSONBytes(ctx context.Context, client HTTPDoer, rawURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -74,7 +84,29 @@ func GetJSONBytes(ctx context.Context, client HTTPDoer, rawURL string) ([]byte, 
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4*1024))
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(MaxResponseBytes)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > MaxResponseBytes {
+		return nil, fmt.Errorf("%w (limit %d bytes)", ErrResponseTruncated, MaxResponseBytes)
+	}
+	if err := rejectNonJSONBody(resp.Header.Get("Content-Type"), body); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func rejectNonJSONBody(contentType string, body []byte) error {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	if ct != "" && strings.Contains(ct, "text/html") {
+		return fmt.Errorf("non-JSON Content-Type %q", contentType)
+	}
+	trim := bytes.TrimSpace(body)
+	if len(trim) > 0 && trim[0] == '<' {
+		return fmt.Errorf("non-JSON response (looks like HTML)")
+	}
+	return nil
 }
 
 // ServicesURL builds Jaeger GET /api/services.
@@ -102,26 +134,86 @@ func TracesURL(jaegerBase, service string, start, end time.Time, limit int, mark
 
 // QueryTraces fetches traces for a service, preferring a user_agent tag filter.
 // Falls back to an unfiltered window query when the filter returns empty.
+//
+// Oversized Jaeger payloads (common under load-generator traffic) are detected
+// as ErrResponseTruncated. QueryTraces then retries with smaller limits and,
+// if still truncated, returns an empty result so callers can keep polling for
+// the marker-filtered trace instead of failing as "malformed JSON".
 func QueryTraces(ctx context.Context, client HTTPDoer, jaegerBase, service string, start, end time.Time, marker string, limit int) (TracesResponse, error) {
-	raw, err := GetJSONBytes(ctx, client, TracesURL(jaegerBase, service, start, end, limit, marker))
-	if err == nil {
-		parsed, perr := ParseTraces(raw)
-		if perr != nil {
-			return TracesResponse{}, perr
-		}
-		if len(parsed.Data) > 0 {
-			return parsed, nil
+	if limit <= 0 {
+		limit = 50
+	}
+	limits := descendingLimits(limit)
+
+	if strings.TrimSpace(marker) != "" {
+		for _, lim := range limits {
+			resp, err := fetchTraces(ctx, client, jaegerBase, service, start, end, marker, lim)
+			if err == nil {
+				if len(resp.Data) > 0 {
+					return resp, nil
+				}
+				// Empty marker filter — stop shrinking; try unfiltered.
+				break
+			}
+			if errors.Is(err, ErrResponseTruncated) {
+				continue
+			}
+			// Network/HTTP/HTML errors on the marker query: still try unfiltered
+			// (matches prior fallthrough behavior when GetJSONBytes failed).
+			break
 		}
 	}
-	raw, err = GetJSONBytes(ctx, client, TracesURL(jaegerBase, service, start, end, limit, ""))
+
+	var lastTrunc error
+	for _, lim := range limits {
+		resp, err := fetchTraces(ctx, client, jaegerBase, service, start, end, "", lim)
+		if err == nil {
+			return resp, nil
+		}
+		if errors.Is(err, ErrResponseTruncated) {
+			lastTrunc = err
+			continue
+		}
+		return TracesResponse{}, err
+	}
+	if lastTrunc != nil {
+		// Soft-empty: keep polling; marker filter usually succeeds once the
+		// diagnostic request is indexed. Do not surface truncated JSON as
+		// "malformed" / telemetry_unreachable.
+		return TracesResponse{Data: []Trace{}}, nil
+	}
+	return TracesResponse{Data: []Trace{}}, nil
+}
+
+func fetchTraces(ctx context.Context, client HTTPDoer, jaegerBase, service string, start, end time.Time, marker string, limit int) (TracesResponse, error) {
+	raw, err := GetJSONBytes(ctx, client, TracesURL(jaegerBase, service, start, end, limit, marker))
 	if err != nil {
 		return TracesResponse{}, err
 	}
-	parsed, perr := ParseTraces(raw)
-	if perr != nil {
-		return TracesResponse{}, perr
+	return ParseTraces(raw)
+}
+
+func descendingLimits(max int) []int {
+	if max <= 0 {
+		max = 50
 	}
-	return parsed, nil
+	candidates := []int{max, 20, 10, 5, 2}
+	seen := map[int]struct{}{}
+	out := make([]int, 0, len(candidates))
+	for _, n := range candidates {
+		if n <= 0 || n > max {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	if len(out) == 0 {
+		return []int{max}
+	}
+	return out
 }
 
 // RedactURL strips userinfo and non-allowlisted query params for API surfaces.

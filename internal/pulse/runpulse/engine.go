@@ -2,6 +2,7 @@ package runpulse
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -298,6 +299,15 @@ func (e *Engine) execute(ctx context.Context, cancel context.CancelFunc, id stri
 				if ctx.Err() != nil {
 					e.finishTimeoutOrCancel(id, ctx.Err(), lastRes)
 					return
+				}
+				// Truncation is handled inside QueryTraces (soft-empty). Any residual
+				// truncation error must not abort the run as "malformed JSON".
+				if errors.Is(qerr, tracesmoke.ErrResponseTruncated) {
+					e.patch(id, func(r *Run) {
+						r.Warnings = appendUnique(r.Warnings,
+							fmt.Sprintf("Jaeger traces response for %s exceeded size bound; retrying with smaller queries / marker filter", svc))
+					})
+					continue
 				}
 				e.fail(id, FailTelemetryUnreachable, fmt.Sprintf("Jaeger traces API unreachable (%s): %v", svc, qerr), reqResult)
 				return
