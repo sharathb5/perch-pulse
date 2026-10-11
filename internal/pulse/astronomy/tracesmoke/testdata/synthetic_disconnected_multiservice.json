@@ -1,0 +1,55 @@
+{
+  "_comment": "SYNTHETIC: process table lists many services, but marked request subgraph is frontend-only",
+  "data": [
+    {
+      "traceID": "56565656565656565656565656565656",
+      "spans": [
+        {
+          "traceID": "56565656565656565656565656565656",
+          "spanID": "aaaaaaaaaaaaaaaa",
+          "operationName": "GET",
+          "references": [],
+          "startTime": 1700000001000000,
+          "duration": 1000,
+          "tags": [
+            {"key": "http.url", "type": "string", "value": "http://127.0.0.1:8080/api/recommendations?productIds=OLJCESPC7Z"},
+            {"key": "user_agent", "type": "string", "value": "perch-astronomy-smoke/run-test-marker"}
+          ],
+          "processID": "p1"
+        },
+        {
+          "traceID": "56565656565656565656565656565656",
+          "spanID": "bbbbbbbbbbbbbbbb",
+          "operationName": "oteldemo.RecommendationService/ListRecommendations",
+          "references": [],
+          "startTime": 1700000001000500,
+          "duration": 2000,
+          "tags": [],
+          "processID": "p2"
+        },
+        {
+          "traceID": "56565656565656565656565656565656",
+          "spanID": "cccccccccccccccc",
+          "operationName": "oteldemo.ProductCatalogService/ListProducts",
+          "references": [
+            {"refType": "CHILD_OF", "traceID": "56565656565656565656565656565656", "spanID": "bbbbbbbbbbbbbbbb"}
+          ],
+          "startTime": 1700000001000600,
+          "duration": 1000,
+          "tags": [],
+          "processID": "p3"
+        }
+      ],
+      "processes": {
+        "p1": {"serviceName": "frontend", "tags": []},
+        "p2": {"serviceName": "recommendation", "tags": []},
+        "p3": {"serviceName": "product-catalog", "tags": []}
+      },
+      "warnings": null
+    }
+  ],
+  "total": 0,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

@@ -1,0 +1,8 @@
+{
+  "_comment": "SYNTHETIC Jaeger services response",
+  "data": ["frontend", "recommendation", "product-catalog", "cart"],
+  "total": 4,
+  "limit": 0,
+  "offset": 0,
+  "errors": null
+}

@@ -4,9 +4,10 @@
 #
 # Proves (when resources allow):
 #   stack readiness → perch.yaml graph → /api/graph+/api/status → bounded
-#   synthetic GET → optional Jaeger/Prometheus visibility → clean stop
+#   storefront GET → recommendations-browse synthetic traffic → same-trace
+#   multi-service Jaeger evidence → clean stop
 #
-# Honesty: HTTP 200 alone is not success; we report exactly what was observed.
+# Honesty: HTTP 200 alone is not success; missing multi-service trace evidence FAILs.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -124,16 +125,15 @@ grep -q '"nodes"' "$ARTIFACT_DIR/api-status.json" || { viz_down; fail "/api/stat
 ok "viz /api/graph and /api/status responded with nodes"
 viz_down
 
-echo "==== bounded safe synthetic traffic (GET storefront only) ===="
-# One safe GET to the storefront — no checkout/order/payment/email side effects.
+echo "==== bounded safe synthetic traffic (GET storefront) ===="
+# Storefront HTML reachability — client-side JS is NOT executed by curl, so this
+# alone cannot prove product-catalog / recommendation spans.
 TRAFFIC_CODE="$(curl -sS -o "$ARTIFACT_DIR/frontend-get.body" -w '%{http_code}' --max-time 15 "$BASE_URL/" || echo 000)"
 echo "frontend_get_http=$TRAFFIC_CODE" | tee "$ARTIFACT_DIR/traffic.txt"
 [[ "$TRAFFIC_CODE" == "200" ]] || fail "storefront GET did not return 200 (got $TRAFFIC_CODE)"
-ok "storefront GET observed HTTP $TRAFFIC_CODE (not proof of full checkout path)"
+ok "storefront GET observed HTTP $TRAFFIC_CODE (HTML only; not multi-service proof)"
 
-echo "==== telemetry surfaces (best-effort, reported honestly) ===="
-PROM_URL="${ASTRONOMY_PROM_URL:-$BASE_URL/}"
-# Prometheus is often behind Grafana path; try common demo endpoints.
+echo "==== telemetry surfaces (Prometheus/Grafana best-effort) ===="
 PROM_OK=0
 for u in \
   "$BASE_URL/grafana/api/health" \
@@ -148,22 +148,32 @@ do
 done
 [[ "$PROM_OK" -eq 1 ]] && ok "observability HTTP surface reachable" || warn "Prometheus/Grafana probe not confirmed"
 
-JAEGER_URL="${ASTRONOMY_JAEGER_SERVICES_URL:-$BASE_URL/jaeger/ui/api/services}"
-if curl -sf --max-time 10 "$JAEGER_URL" >"$ARTIFACT_DIR/jaeger-services.json" 2>/dev/null; then
-  if grep -Eq '"frontend"|"checkout"|"frontend-proxy"' "$ARTIFACT_DIR/jaeger-services.json"; then
-    ok "Jaeger lists expected shop service name(s) after traffic"
-  else
-    warn "Jaeger reachable but expected service names not yet present (load may be cold)"
-  fi
-else
-  warn "Jaeger services API not reachable via $JAEGER_URL"
-fi
+echo "==== required multi-service trace smoke (recommendations browse) ===="
+# Mirrors Locust WebsiteUser.get_recommendations (read-only). Hard-fail unless
+# Jaeger returns one same-trace with >=2 app services and a cross-service edge.
+TRACE_DEADLINE_SECS="${ASTRONOMY_TRACE_DEADLINE_SECS:-120}"
+TRACE_POLL_SECS="${ASTRONOMY_TRACE_POLL_SECS:-3}"
+TRACE_MARKER="${ASTRONOMY_TRACE_MARKER:-perch-astronomy-smoke/${GITHUB_RUN_ID:-local}-$(date +%s)}"
+TRACE_BIN="$ARTIFACT_DIR/trace-smoke"
+(cd "$ROOT" && go build -o "$TRACE_BIN" ./examples/astronomy-shop/cmd/trace-smoke)
+"$TRACE_BIN" \
+  --base-url "$BASE_URL" \
+  --jaeger-base "${ASTRONOMY_JAEGER_UI_BASE:-$BASE_URL/jaeger/ui}" \
+  --artifact-dir "$ARTIFACT_DIR" \
+  --marker "$TRACE_MARKER" \
+  --product-id "${ASTRONOMY_TRACE_PRODUCT_ID:-OLJCESPC7Z}" \
+  --deadline-secs "$TRACE_DEADLINE_SECS" \
+  --poll-secs "$TRACE_POLL_SECS" \
+  --max-requests "${ASTRONOMY_TRACE_MAX_REQUESTS:-5}" \
+  --request-timeout-secs "${ASTRONOMY_TRACE_REQUEST_TIMEOUT_SECS:-15}" \
+  | tee "$ARTIFACT_DIR/trace-smoke.log"
+ok "multi-service Jaeger trace evidence collected for recommendations-browse"
 
 # Service mapping honesty: identity map is compose-name based (no fuzzy display names).
 MAP="$ROOT/internal/pulse/astronomy/service-mapping.yaml"
 grep -q 'shipping' "$MAP" || fail "service-mapping.yaml missing shipping"
 ok "Pulse astronomy mapping file present (compose names, not display-name fuzzy match)"
 
-note "Observed: frontend HTTP $TRAFFIC_CODE; graph nodes present; verify-live passed."
-note "Not claimed: full multi-hop checkout span, payment charge, or email delivery."
+note "Observed: frontend HTTP $TRAFFIC_CODE; graph nodes present; verify-live passed; multi-service trace qualified."
+note "Not claimed: checkout/payment/email path, fault injection, or Run Pulse UI (#25)."
 ok "Astronomy Shop CI smoke completed within runner budgets"

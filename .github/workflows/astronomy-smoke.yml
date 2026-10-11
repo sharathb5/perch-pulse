@@ -33,6 +33,12 @@ jobs:
       ASTRONOMY_MIN_DISK_KB: '8388608'
       ASTRONOMY_MIN_MEM_KB: '3145728'
       ASTRONOMY_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/examples/astronomy-shop/.smoke-artifacts
+      # Bounded multi-service trace probe (recommendations browse → Jaeger).
+      ASTRONOMY_TRACE_DEADLINE_SECS: '120'
+      ASTRONOMY_TRACE_POLL_SECS: '3'
+      ASTRONOMY_TRACE_MAX_REQUESTS: '5'
+      ASTRONOMY_TRACE_REQUEST_TIMEOUT_SECS: '15'
+      ASTRONOMY_TRACE_PRODUCT_ID: 'OLJCESPC7Z'
     steps:
       - uses: actions/checkout@v4
 

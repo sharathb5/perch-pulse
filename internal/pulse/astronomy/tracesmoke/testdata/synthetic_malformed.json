@@ -1,0 +1,5 @@
+{
+  "_comment": "SYNTHETIC malformed Jaeger response: data is an object, not an array",
+  "data": {"unexpected": true},
+  "errors": null
+}
