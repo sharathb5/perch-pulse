@@ -109,6 +109,8 @@ The Astronomy Smoke workflow starts `perch viz` with `PERCH_RUN_PULSE_DEMO_BASE_
 
 Both stages share one Astronomy Shop stack; the second probe exists to prove the HTTP API path, not to replace the first.
 
+Jaeger responses larger than the bounded read limit are detected as truncated (not silently sliced mid-JSON). `QueryTraces` retries with smaller `limit` values and soft-empties when still oversized so Run Pulse can keep polling for the marker-filtered trace instead of failing as malformed JSON under load-generator traffic.
+
 ## Known limitations
 
 - Single workflow; Astronomy Shop demo only
