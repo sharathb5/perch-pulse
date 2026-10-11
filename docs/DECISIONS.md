@@ -28,6 +28,27 @@ Rules:
 
 ---
 
+## ADR-023: Live Pulse UI overlays without redesign
+
+**Date:** 2026-10-11  
+**Status:** Accepted  
+**Issue:** #17 (stacked on ADR-022)
+
+**Context:** Part 1 exposes `GET /api/pulse/live/*` snapshots. The viz must show current telemetry and active regressions without inventing a second dashboard, without overwriting StatusPill / Run Pulse, and without treating stale or missing series as healthy.
+
+**Decision:**
+1. Poll live + historical Pulse GETs independently (~8s, abortable). UI polling never POSTs Run Pulse or triggers ingestion.
+2. Join live services to React Flow nodes by exact `graph_node` only; unmapped rows stay in the Overview list. When both navbar env and collector env are in `{production,staging,dev}`, require an exact match; Astronomy `local` collectors may join with an explicit collector-env note (navbar env ≠ collector env).
+3. Pulse badge precedence: `live_regression` > unresolved historical `open` > `stale` > `historical` > unavailable/unknown. StatusPill and `data-run-pulse` remain independent.
+4. Incident labels: ACTIVE only when live lifecycle + `source=live` **and** the collector status is currently available (`collecting`/`warming_up`); retained snapshots after failure become TELEMETRY UNAVAILABLE. Persisted open files are HISTORICAL until the live collector confirms.
+5. Fixtures under `web/fixtures/pulse.live.*.json` regenerated from Go API (`UPDATE_LIVE_FIXTURES=1`).
+
+**Consequences:** Existing sidebar tabs (Overview / Incidents / Changes / Run Pulse) gain a Live telemetry section and graph `data-live-pulse` attrs. No WebSockets. Live Docker UI smoke remains optional.
+
+**Alternatives considered:** Separate Live tab (rejected: fragments investigation); WebSocket push (rejected: backend is snapshot poll); fuzzy service-name join (rejected: ADR-022 mapper only).
+
+---
+
 ## ADR-022: Live Pulse runtime inside perch viz (opt-in)
 
 **Date:** 2026-10-11  

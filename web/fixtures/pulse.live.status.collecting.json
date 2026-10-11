@@ -1,0 +1,39 @@
+{
+  "generated_at": "2026-10-11T22:04:15Z",
+  "limitations": [
+    "Live snapshot is polled server-side; GET handlers do not query Prometheus.",
+    "Missing series are omitted — never treated as zero errors or healthy.",
+    "Stale telemetry is not healthy; missing telemetry is not recovery.",
+    "Detector findings are not proof of root cause."
+  ],
+  "schema_version": "pulse.api.live_status.v1",
+  "status": {
+    "active_health_note": "Active reachability/latency probes remain on GET /api/status and are not represented here.",
+    "active_incidents": 1,
+    "active_regressions": 1,
+    "available": true,
+    "configured": true,
+    "detector_version": "baseline-rel-mad-v1",
+    "enabled": true,
+    "environment": "local",
+    "freshness_window": "2m0s",
+    "generated_at": "2026-10-11T22:04:15Z",
+    "last_attempt_at": "2026-10-11T22:04:15Z",
+    "last_success_at": "2026-10-11T22:04:15Z",
+    "limitations": [
+      "Live snapshot is polled server-side; GET handlers do not query Prometheus.",
+      "Missing series are omitted — never treated as zero errors or healthy.",
+      "Stale telemetry is not healthy; missing telemetry is not recovery.",
+      "Detector findings are not proof of root cause."
+    ],
+    "poll_interval": "5m0s",
+    "prometheus_configured": true,
+    "run_pulse_note": "Run Pulse remains independent on /api/pulse/workflows and /api/pulse/runs.",
+    "sample_window": "2m0s",
+    "schema_version": "pulse.api.live_status.v1",
+    "services_observed": 1,
+    "services_with_baseline": 1,
+    "state": "collecting",
+    "unavailable_or_unknown": 0
+  }
+}

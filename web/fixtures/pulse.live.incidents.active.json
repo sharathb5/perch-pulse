@@ -1,0 +1,180 @@
+{
+  "count": 1,
+  "generated_at": "2026-10-11T22:04:15Z",
+  "incidents": [
+    {
+      "first_detected_at": "2026-10-11T22:03:15Z",
+      "graph_node": "payment",
+      "incident": {
+        "affected_service_ids": [
+          "astronomy/local/payment"
+        ],
+        "after": {
+          "available": true,
+          "digests": [
+            {
+              "count": 1,
+              "first_at": "2026-10-11T22:04:15Z",
+              "last_at": "2026-10-11T22:04:15Z",
+              "max": 1,
+              "median": 1,
+              "min": 1,
+              "signal": "call_rate"
+            },
+            {
+              "count": 1,
+              "first_at": "2026-10-11T22:04:15Z",
+              "last_at": "2026-10-11T22:04:15Z",
+              "max": 0.01,
+              "median": 0.01,
+              "min": 0.01,
+              "signal": "error_rate"
+            },
+            {
+              "count": 1,
+              "first_at": "2026-10-11T22:04:15Z",
+              "last_at": "2026-10-11T22:04:15Z",
+              "max": 5000,
+              "median": 5000,
+              "min": 5000,
+              "signal": "latency_ms"
+            }
+          ],
+          "phase": "after",
+          "window": {
+            "end": "2026-10-11T22:06:15Z",
+            "start": "2026-10-11T22:04:15Z"
+          }
+        },
+        "before": {
+          "available": false,
+          "limitation": "no samples in window for primary service",
+          "phase": "before",
+          "window": {
+            "end": "2026-10-11T22:03:44.999Z",
+            "start": "2026-10-11T22:01:45Z"
+          }
+        },
+        "during": {
+          "available": true,
+          "digests": [
+            {
+              "count": 1,
+              "first_at": "2026-10-11T22:04:15Z",
+              "last_at": "2026-10-11T22:04:15Z",
+              "max": 1,
+              "median": 1,
+              "min": 1,
+              "signal": "call_rate"
+            },
+            {
+              "count": 1,
+              "first_at": "2026-10-11T22:04:15Z",
+              "last_at": "2026-10-11T22:04:15Z",
+              "max": 0.01,
+              "median": 0.01,
+              "min": 0.01,
+              "signal": "error_rate"
+            },
+            {
+              "count": 1,
+              "first_at": "2026-10-11T22:04:15Z",
+              "last_at": "2026-10-11T22:04:15Z",
+              "max": 5000,
+              "median": 5000,
+              "min": 5000,
+              "signal": "latency_ms"
+            }
+          ],
+          "phase": "during",
+          "window": {
+            "end": "2026-10-11T22:04:15Z",
+            "start": "2026-10-11T22:03:45Z"
+          }
+        },
+        "environment": "local",
+        "evidence": [
+          {
+            "ref": "finding:astronomy/local/payment|latency_ms|20261011T220315.000000000Z",
+            "summary": "observed latency degradation: current_median_ms=5000.00 baseline_median_ms=80.00 rel_increase=61.50 (correlated change, not proven causation)"
+          }
+        ],
+        "finding_ids": [
+          "astronomy/local/payment|latency_ms|20261011T220315.000000000Z"
+        ],
+        "first_detected_at": "2026-10-11T22:03:15Z",
+        "incident_id": "inc|astronomy/local/payment|20261011T220315.000000000Z",
+        "inferences": [
+          "degradation is a detector finding from telemetry baselines (not proven root cause)"
+        ],
+        "last_observed_at": "2026-10-11T22:04:15Z",
+        "limitations": [
+          "before/during/after digests are summaries, not full telemetry dumps",
+          "incident assembly does not use scenario ground-truth labels",
+          "correlation with changes is a separate step and does not prove causation",
+          "missing before-window samples: cannot assert pre-incident baseline from this snapshot alone"
+        ],
+        "observations": [
+          "primary service astronomy/local/payment first detected degraded at 2026-10-11T22:03:15Z",
+          "detector signals: latency_ms",
+          "before-window telemetry unavailable or empty",
+          "during-window telemetry available (2026-10-11T22:03:45Z–2026-10-11T22:04:15Z)",
+          "incident still open (no recovery timestamp)"
+        ],
+        "primary_service_id": "astronomy/local/payment",
+        "schema_version": "pulse.incident.v1",
+        "signal_types": [
+          "latency_ms"
+        ],
+        "summary": "astronomy/local/payment degradation detected via latency_ms (evidence snapshot; not proven causation)"
+      },
+      "incident_id": "inc|astronomy/local/payment|20261011T220315.000000000Z",
+      "last_observed_at": "2026-10-11T22:04:15Z",
+      "lifecycle": "active",
+      "limitations": [
+        "Lifecycle labels distinguish live collector state from persisted history.",
+        "Missing telemetry after an incident is not recovery."
+      ],
+      "primary_service_id": "astronomy/local/payment",
+      "signal_types": [
+        "latency_ms"
+      ],
+      "source": "live",
+      "summary": "astronomy/local/payment degradation detected via latency_ms (evidence snapshot; not proven causation)"
+    }
+  ],
+  "limitations": [
+    "Active live incidents are labeled separately from recovered/historical snapshots.",
+    "Deduplicated by stable incident_id across live and persisted views."
+  ],
+  "schema_version": "pulse.api.live_incidents.v1",
+  "status": {
+    "active_health_note": "Active reachability/latency probes remain on GET /api/status and are not represented here.",
+    "active_incidents": 1,
+    "active_regressions": 1,
+    "available": true,
+    "configured": true,
+    "detector_version": "baseline-rel-mad-v1",
+    "enabled": true,
+    "environment": "local",
+    "freshness_window": "2m0s",
+    "generated_at": "2026-10-11T22:04:15Z",
+    "last_attempt_at": "2026-10-11T22:04:15Z",
+    "last_success_at": "2026-10-11T22:04:15Z",
+    "limitations": [
+      "Live snapshot is polled server-side; GET handlers do not query Prometheus.",
+      "Missing series are omitted — never treated as zero errors or healthy.",
+      "Stale telemetry is not healthy; missing telemetry is not recovery.",
+      "Detector findings are not proof of root cause."
+    ],
+    "poll_interval": "5m0s",
+    "prometheus_configured": true,
+    "run_pulse_note": "Run Pulse remains independent on /api/pulse/workflows and /api/pulse/runs.",
+    "sample_window": "2m0s",
+    "schema_version": "pulse.api.live_status.v1",
+    "services_observed": 1,
+    "services_with_baseline": 1,
+    "state": "collecting",
+    "unavailable_or_unknown": 0
+  }
+}

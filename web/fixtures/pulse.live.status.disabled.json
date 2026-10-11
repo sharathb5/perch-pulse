@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-10-11T08:04:20.128872Z",
+  "limitations": [
+    "Live Pulse collector is not running.",
+    "Missing or disabled live telemetry is never reported as healthy."
+  ],
+  "schema_version": "pulse.api.live_status.v1",
+  "status": {
+    "active_health_note": "Active reachability/latency probes remain on GET /api/status and are not represented here.",
+    "active_incidents": 0,
+    "active_regressions": 0,
+    "available": false,
+    "configured": false,
+    "enabled": false,
+    "generated_at": "2026-10-11T08:04:20.128872Z",
+    "limitations": [
+      "Live Pulse collector is not running.",
+      "Missing or disabled live telemetry is never reported as healthy."
+    ],
+    "prometheus_configured": false,
+    "run_pulse_note": "Run Pulse remains independent on /api/pulse/workflows and /api/pulse/runs.",
+    "schema_version": "pulse.api.live_status.v1",
+    "services_observed": 0,
+    "services_with_baseline": 0,
+    "state": "disabled",
+    "unavailability_reason": "Live Pulse is not mounted in this viz process.",
+    "unavailable_or_unknown": 0
+  }
+}

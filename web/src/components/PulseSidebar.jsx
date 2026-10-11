@@ -3,6 +3,12 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { usePulseIncident } from '../hooks/usePulseIncident.js'
 import {
+  LIVE_LIFECYCLE,
+  formatLiveBaseline,
+  formatLiveSignalValue,
+  liveRuntimeSummary,
+} from '../lib/livePulse.js'
+import {
   INCIDENT_STATE,
   PULSE_TAB,
   buildDigestComparisonRows,
@@ -29,6 +35,10 @@ import { PulseRunPanel } from './PulseRunPanel.jsx'
  *   overview: object | null,
  *   incidents: object[],
  *   changes: object[],
+ *   liveStatus?: object | null,
+ *   liveServices?: object[],
+ *   unmappedLive?: object[],
+ *   selectedLive?: object | null,
  *   limitations?: string[],
  *   loading?: boolean,
  *   error?: string | null,
@@ -51,6 +61,10 @@ export function PulseSidebar({
   overview,
   incidents = [],
   changes = [],
+  liveStatus = null,
+  liveServices = [],
+  unmappedLive = [],
+  selectedLive = null,
   limitations = [],
   loading = false,
   error = null,
@@ -180,6 +194,10 @@ export function PulseSidebar({
             overview={hasSnapshot ? overview : null}
             limitations={limitations}
             dataSources={dataSources}
+            liveStatus={liveStatus}
+            liveServices={liveServices}
+            unmappedLive={unmappedLive}
+            selectedLive={selectedLive}
           />
         )}
         {activeTab === PULSE_TAB.INCIDENTS && (
@@ -215,17 +233,137 @@ export function PulseSidebar({
   )
 }
 
-function OverviewPanel({ overview, limitations, dataSources }) {
-  if (!overview) {
+function OverviewPanel({
+  overview,
+  limitations,
+  dataSources,
+  liveStatus,
+  liveServices = [],
+  unmappedLive = [],
+  selectedLive = null,
+}) {
+  if (!overview && !liveStatus) {
     return (
       <p data-testid="pulse-overview-empty" className="text-gray-500">
         No Pulse overview data yet.
       </p>
     )
   }
-  const src = overview.sourceInfo
+  const src = overview?.sourceInfo
+  const liveSummary = liveRuntimeSummary(liveStatus)
   return (
     <div data-testid="pulse-overview" className="space-y-3">
+      <section data-testid="pulse-live-telemetry" className="rounded border border-gray-100 bg-gray-50 px-2 py-2">
+        <h3 className="text-[10px] uppercase tracking-wide text-gray-400">Live telemetry</h3>
+        <p
+          data-testid="pulse-live-runtime"
+          data-live-state={liveStatus?.state ?? 'disabled'}
+          className={`mt-1 font-medium ${
+            liveSummary.tone === 'warn'
+              ? 'text-amber-800'
+              : liveSummary.tone === 'ok'
+                ? 'text-gray-900'
+                : 'text-gray-600'
+          }`}
+        >
+          {liveSummary.title}
+        </p>
+        <p data-testid="pulse-live-runtime-detail" className="mt-0.5 text-[10px] text-gray-500">
+          {liveSummary.detail}
+        </p>
+        {liveStatus?.enabled && (
+          <dl className="mt-2 grid grid-cols-2 gap-1 font-mono text-[10px] text-gray-700">
+            <div>
+              <dt className="text-gray-400">observed</dt>
+              <dd data-testid="pulse-live-observed">{liveStatus.servicesObserved}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-400">regressions</dt>
+              <dd data-testid="pulse-live-regressions">{liveStatus.activeRegressions}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-400">active incidents</dt>
+              <dd data-testid="pulse-live-active-incidents">{liveStatus.activeIncidents}</dd>
+            </div>
+            <div>
+              <dt className="text-gray-400">unknown/n/a</dt>
+              <dd data-testid="pulse-live-unknown">{liveStatus.unavailableOrUnknown}</dd>
+            </div>
+          </dl>
+        )}
+        {liveStatus?.lastSuccessAt && (
+          <p className="mt-1 font-mono text-[10px] text-gray-500">
+            last success {formatPulseTimestamp(liveStatus.lastSuccessAt)}
+          </p>
+        )}
+        {liveStatus?.environment && (
+          <p data-testid="pulse-live-collector-env" className="mt-1 font-mono text-[10px] text-gray-500">
+            collector env {liveStatus.environment} (independent of navbar graph env)
+          </p>
+        )}
+        <p className="mt-1 text-[10px] text-gray-400">
+          Distinct from StatusPill probes and on-demand Run Pulse. Missing values are not zero errors.
+        </p>
+        {unmappedLive.length > 0 && (
+          <p data-testid="pulse-live-unmapped" className="mt-1 text-amber-800">
+            Unmapped telemetry ({unmappedLive.length}):{' '}
+            {unmappedLive
+              .slice(0, 4)
+              .map((s) => s.serviceId)
+              .join(', ')}
+          </p>
+        )}
+        {selectedLive && (
+          <div data-testid="pulse-live-selected" className="mt-2 border-t border-gray-200 pt-2">
+            <h4 className="text-[10px] uppercase tracking-wide text-gray-400">
+              Selected · {selectedLive.graphNode || selectedLive.serviceId}
+            </h4>
+            <p className="mt-0.5 text-[10px] text-gray-500">
+              {selectedLive.quality}/{selectedLive.intelligence}
+              {selectedLive.baselineReady ? '' : ' · baseline warming'}
+              {selectedLive.regressionOpen ? ' · regression open' : ''}
+            </p>
+            <ul className="mt-1 space-y-0.5 font-mono text-[10px]">
+              {selectedLive.signals?.map((sig) => {
+                const fmt = formatLiveSignalValue(sig)
+                return (
+                  <li key={sig.signal} data-testid={`pulse-live-signal-${sig.signal}`}>
+                    {sig.signal}:{' '}
+                    {sig.value == null || sig.quality === 'missing' ? (
+                      <span className="text-amber-800">unavailable</span>
+                    ) : (
+                      <>
+                        {fmt.text} {fmt.unit}
+                        {sig.quality === 'stale' ? ' (stale)' : ''}
+                        {sig.baselineValue != null && sig.regressionOpen
+                          ? ` · baseline ${formatLiveBaseline(sig).text}`
+                          : ''}
+                      </>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
+        {!selectedLive && liveServices.some((s) => s.regressionOpen) && (
+          <ul data-testid="pulse-live-regression-list" className="mt-2 space-y-0.5 font-mono text-[10px]">
+            {liveServices
+              .filter((s) => s.regressionOpen)
+              .slice(0, 6)
+              .map((s) => (
+                <li key={s.serviceId}>
+                  {s.graphNode || s.serviceId} · live regression
+                </li>
+              ))}
+          </ul>
+        )}
+      </section>
+
+      {!overview ? (
+        <p className="text-gray-500">Historical Pulse overview unavailable this refresh.</p>
+      ) : (
+        <>
       <section>
         <h3 className="text-[10px] uppercase tracking-wide text-gray-400">Data sources</h3>
         <p className="mt-1 text-gray-800" title={src?.detail}>
@@ -328,6 +466,8 @@ function OverviewPanel({ overview, limitations, dataSources }) {
               ))}
           </ul>
         </section>
+      )}
+        </>
       )}
     </div>
   )
@@ -457,15 +597,19 @@ function IncidentsPanel({
                 className="w-full rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-left hover:bg-gray-100"
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-medium text-gray-900">
-                    {inc.open ? 'Unresolved' : 'Recovered'}
+                  <span
+                    data-testid="pulse-incident-lifecycle"
+                    data-lifecycle={inc.lifecycle || (inc.open ? 'active' : 'recovered')}
+                    className="font-medium text-gray-900"
+                  >
+                    {incidentStateLabel(inc)}
                   </span>
                   <span className="font-mono text-[10px] text-gray-400">
                     {formatPulseTimestamp(inc.lastObservedAt)}
                   </span>
                 </div>
                 <div className="mt-0.5 truncate font-mono text-[10px] text-gray-600">
-                  {inc.primaryServiceId}
+                  {inc.graphNode || inc.primaryServiceId}
                 </div>
                 <div className="mt-0.5 text-gray-500">
                   detected {formatPulseTimestamp(inc.firstDetectedAt)}
@@ -479,12 +623,16 @@ function IncidentsPanel({
                 {inc.summary && (
                   <p className="mt-0.5 line-clamp-2 text-gray-800">{inc.summary}</p>
                 )}
-                {inc.open && (
+                {inc.lifecycle === LIVE_LIFECYCLE.ACTIVE && inc.liveSource === 'live' ? (
+                  <p className="mt-0.5 text-[10px] text-orange-800">
+                    ACTIVE from Live Pulse collector — telemetry-backed, not StatusPill health.
+                  </p>
+                ) : inc.open ? (
                   <p className="mt-0.5 text-[10px] text-amber-700">
                     Unresolved persisted record — not labeled as a live outage without fresh
                     telemetry.
                   </p>
-                )}
+                ) : null}
               </button>
             </li>
           ))}
