@@ -168,9 +168,11 @@ F1 still ships `DeterministicProposer`. Future eval (F2b) can compare LLM propos
 against this baseline + human feedback, optionally storing artifacts in
 Databricks/MLflow without making them required.
 
-## Evaluation
+## Evaluation (F1 unit + F2b harness)
 
-Package `internal/pulse/investigation/eval` scores:
+Package `internal/pulse/investigation/eval` provides:
+
+**F1 unit scoring** (`Score` / `Pass`):
 
 - evidence citation coverage (every hypothesis must cite refs)
 - unresolved citation count (refs must resolve to source_references / symptoms / phases)
@@ -179,6 +181,18 @@ Package `internal/pulse/investigation/eval` scores:
 - uncertainty classification (`diagnosed=false`, unknowns present)
 - false causal attribution count
 - rerun consistency is asserted in unit tests via content fingerprint equality (not a `Pass` field)
+
+**F2b offline harness** (`BuiltinDataset`, `Run`, `perch pulse investigation-eval`):
+
+- versioned cases `pulse.investigation.eval_case.v1` with separated generation /
+  annotations / hidden ground truth
+- same-fingerprint comparison of deterministic F1 vs stored F2a proposals
+- mechanical method scores with explicit aggregate denominators
+- synthetic fixture proposals clearly labeled; missing proposals not scored as model quality
+- human rubric for semantic support (no LLM judge by default)
+- optional feedback summaries treated as subjective usefulness only
+
+See [ADR-026](DECISIONS.md) and `examples/astronomy-shop/eval/investigation/`.
 
 ## Security
 

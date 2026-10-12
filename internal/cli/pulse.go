@@ -15,6 +15,7 @@ import (
 	"github.com/yashg4509/perch/internal/pulse/correlate"
 	"github.com/yashg4509/perch/internal/pulse/incident"
 	"github.com/yashg4509/perch/internal/pulse/investigation"
+	"github.com/yashg4509/perch/internal/pulse/investigation/eval"
 	pulsellm "github.com/yashg4509/perch/internal/pulse/investigation/llm"
 )
 
@@ -34,6 +35,7 @@ func newPulseCmd() *cobra.Command {
 	cmd.AddCommand(newPulseInvestigationContextCmd())
 	cmd.AddCommand(newPulseLLMStatusCmd())
 	cmd.AddCommand(newPulseLLMProposeCmd())
+	cmd.AddCommand(newPulseInvestigationEvalCmd())
 	return cmd
 }
 
@@ -421,6 +423,54 @@ func newPulseLLMProposeCmd() *cobra.Command {
 	}
 	cmd.Flags().String("expected-fingerprint", "", "Reject if F1 snapshot fingerprint differs")
 	return cmd
+}
+
+func newPulseInvestigationEvalCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "investigation-eval",
+		Short: "Offline evaluation of F1 investigations vs stored F2a proposals (no provider calls)",
+		Args:  cobra.NoArgs,
+		RunE:  runPulseInvestigationEval,
+	}
+	cmd.Flags().String("out-dir", "", "Write report.json and report.md under this directory")
+	cmd.Flags().Bool("json", false, "Print report JSON to stdout (default: markdown summary)")
+	return cmd
+}
+
+func runPulseInvestigationEval(cmd *cobra.Command, _ []string) error {
+	ds, err := eval.BuiltinDataset()
+	if err != nil {
+		return err
+	}
+	rep, err := eval.Run(eval.RunOptions{Dataset: ds})
+	if err != nil {
+		return err
+	}
+	outDir, _ := cmd.Flags().GetString("out-dir")
+	if outDir != "" {
+		if err := os.MkdirAll(outDir, 0o750); err != nil {
+			return err
+		}
+		raw, err := rep.JSON()
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(outDir, "report.json"), raw, 0o600); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(outDir, "report.md"), []byte(rep.Markdown()), 0o600); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "wrote %s/report.json and report.md\n", outDir)
+	}
+	asJSON, _ := cmd.Flags().GetBool("json")
+	if asJSON {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(rep)
+	}
+	_, err = fmt.Fprint(cmd.OutOrStdout(), rep.Markdown())
+	return err
 }
 
 func runPulseLLMPropose(cmd *cobra.Command, args []string) error {
