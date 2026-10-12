@@ -1,0 +1,114 @@
+{
+  "schema_version": "pulse.export.checkpoint.v1",
+  "export_schema_version": "pulse.export.analytics.v1",
+  "updated_at": "2026-10-12T20:00:00Z",
+  "datasets": {
+    "citations": {
+      "keys": {
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|baseline:astronomy/local/payment:error_rate": "ac4e21a7120f36e8937f13825b1461beb24ba0b5d3102ba7270d2d3d371695a9",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|correlation:report": "2cd89a30dedfc5cd0ec12d4e694293462b7f2d05e487280aabb9b1186d69961b",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|correlation:top1": "a0fd7428878eaa6ba1833ddafd81ff87cf66c0cf00ff8997a9fe995aef852e1e",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|finding:astronomy/local/payment|error_rate|20261012T090000.000000000Z": "b51685d6ad22624e799313715371736de6c836f736f1f7a9e8b114898c88a93d",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|incident:inc|astronomy/local/payment|20261012T090000.000000000Z": "dd847ffbff0f54fb9394e53afc86b0bce4e794c4f3ff86f0906cb0fd744fb762",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|phase:after": "df15546d0995dc2081b5d52f80af7b5200a1862abb94ef5d5c005406850a4ea2",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|phase:before": "d9fe5cfb5e436d018b15d08d40ccab0efd6a82a26033392668656b9a96befa57",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|phase:during": "7a5f5b18a7a5d74c3609fcb2d060a5c9ccb3bc9279b9508408b102317289015b",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|symptom:astronomy/local/payment:error_rate": "c8e5e81cbd8d9ff48a553eaba07ae99d35ebe38f976d643a9dc2cc9241bd0dae",
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|topology:primary": "e08f288420350ee55e48bb37e1cdae5d01bb51a2e8ad2132bea82424b84fa314"
+      },
+      "last_key": "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|topology:primary",
+      "row_count": 10
+    },
+    "eval_case_results": {
+      "keys": {
+        "evalrun_1382c782e0cc156e9e8ec23e|case_call_rate_decline": "39898ec392e969ce9fd16aec973df02680d3ac83160a3d90a31365eb6dcfb573",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_incomplete_run_pulse": "478d111bc05b8c1d09dc07aef476a898479ce17a0b10c3cf654efe24481c3084",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_insufficient_evidence": "598a468c340881fc3eca2d65a24b1792b74fb2bd58c95f42885b40403c8a8fcb",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_misleading_metadata": "7b3f9092cb0e92cba136905c3bad452d9b643efc4d2c4ae44a59e6eeae2ba27e",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_missing_baseline": "d7bb9c1889bd45237c71b1e783a0e5719b5468c421eac5ddcdcc4f476e88e4d7",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_multiple_changes": "0853ebdd0d6a9920557e5200385457b89760fe5f7e5f78ecc9a6c6805cf0749b",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_no_changes": "9a8f48601e8fff5f29d6dfdbb9fba704f90c788071b7e0e6a2bd1d937b77cb10",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_payment_error": "fbf4e41c41851cc7e5569da390ada58101fb167d9aebd19ee128ccdf7eec08d9",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_prompt_injection": "0ec3a50d86c959978057dadfabb0dae9bd8a9e19a4fdd3fbedaf66bb6b360b5f",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_recovered": "3596f7f6009105af82d885b858fbf8bc2722b30adc05932b638fc0ad54e68d76",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_shipping_latency": "7c55a3a554b55e20f2740a11fef12bff9cedb8478bded67830221d98057b8e20",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_stale_telemetry": "5523a9bf65eb7f831bad3aad63f056da57ec1309908a605eabf31b8faa7ce256",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_unmapped_service": "3dce074f8e52cb050f9985db36fe324c98d69dc33d65c55de074969ded31dfd6",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_unrelated_change": "33e130781db5c6627607b8d866d4d14b50177bb1f7801cea55fe7c0fb9bfe22b",
+        "evalrun_1382c782e0cc156e9e8ec23e|case_weak_correlation": "315bbc002fa812e76f5c8d398c002ad103261039e324e08df6a54ea709fd3030",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_call_rate_decline": "92a9a91ba887c58d7c5a343c13817855215fe6e483aba18c67478bedd13d1b94",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_incomplete_run_pulse": "497537609b542d30a8fa2d9613ab2b42541e216246e9ae51977c99724d90e205",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_insufficient_evidence": "e349107d25124241fd493889426fd87a306d87088aba7bdc15f71702d7c9be5b",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_misleading_metadata": "e431d31c515c58752bf4d001844cfc909615f6b84e6601f1e034302c1f4eae48",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_missing_baseline": "7c90ef9a0ef1d237f9b88fb1e3d099f2e96800132d6c3421336eff24c5dd2a54",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_multiple_changes": "aa305f92cd32500ac0ca1c05ac8555f842fb434ebac8d3104e0e931551a3a0fb",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_no_changes": "d9e2bb6531eff878bad93533514849581bb4a0296a2ab72e594f3e72e7283627",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_payment_error": "78fac979c01ce7a9d33182523c607256c285e3e9d91b2e781cfa83fe8e27f92f",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_prompt_injection": "5730df62109feb34dbfecdcd38983f33641daac0e6855cfd30bd250cf778acdd",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_recovered": "b84f0fa6df0abd2e7870963b3ccd453bc96316cc8ee6b9fca4d8cb2381770b4c",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_shipping_latency": "9e84d69e13bc0c77226d4c74ea9b92dd88e2e5045300c5c272cef3c18d4a5e76",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_stale_telemetry": "8259ed15d2da0ceb69c56aba15865cc8c98f0c66677411e58462a51741df4576",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_unmapped_service": "df742f2dfb712eedb28b922a987384c03d3384b12ef8b5c0af82f0d1d43917ad",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_unrelated_change": "22487340ff9c58899752941b2d0a4e2cd6985359826c7b21a3293045dca6ae18",
+        "evalrun_6b70916f5a3f8c41cc1b68b3|case_weak_correlation": "8bcce6d1ee69d5a04c71f959fb863d9e897bd791aa79a26ad849bad74230ddd7"
+      },
+      "last_key": "evalrun_6b70916f5a3f8c41cc1b68b3|case_weak_correlation",
+      "row_count": 30
+    },
+    "eval_runs": {
+      "keys": {
+        "evalrun_1382c782e0cc156e9e8ec23e": "8225322625c63e5d3a3f195a439e6509356eca959a95c02a484e3276e9390a17",
+        "evalrun_6b70916f5a3f8c41cc1b68b3": "ed44092ba6fcd87f9ff47be4383ff04f60fbec2e645044a7fcd19ad0bb59cac8"
+      },
+      "last_key": "evalrun_6b70916f5a3f8c41cc1b68b3",
+      "row_count": 2
+    },
+    "hypotheses": {
+      "keys": {
+        "investigation|inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|hyp|dependency|astronomy_local_payment|false": "30abd996f6e0e89ea45867f4cebd722fc309fc389dc9fb29ca27acf9545bbfe1",
+        "investigation|inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|hyp|error_rate_regression|astronomy_local_payment|false": "9c634372375ef20bd7fe677a1bbb60fc60439045c8c7776529e8ac0ef77cffee",
+        "investigation|inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z|hyp|service_local|astronomy_local_payment|false": "fe3520527201b540e679adfe5bd20d88620eb347cd74e122f8a1c5698e00d14e",
+        "proposal|prop-test-1|h1|false": "555fb08298ab764b73922da42ef31a849410ca7f5e4b0afea317d662a055bfc2"
+      },
+      "last_key": "proposal|prop-test-1|h1|false",
+      "row_count": 4
+    },
+    "incident_signals": {
+      "keys": {
+        "inc|astronomy/local/payment|20261012T090000.000000000Z|before|error_rate": "6bbc54c3744e9b0ed48ff22d1051fa3b987ffd021fa5e341ac3ca0ee64e55328",
+        "inc|astronomy/local/payment|20261012T090000.000000000Z|during|error_rate": "138088143bea478067f4ee23517581344f4dba8d19556415de74a1d4982f8f16"
+      },
+      "last_key": "inc|astronomy/local/payment|20261012T090000.000000000Z|during|error_rate",
+      "row_count": 2
+    },
+    "incidents": {
+      "keys": {
+        "inc|astronomy/local/payment|20261012T090000.000000000Z": "73245169c54f5239bcf24d451858238d77c23e7dae332c8b0c3de698f3a75b70"
+      },
+      "last_key": "inc|astronomy/local/payment|20261012T090000.000000000Z",
+      "row_count": 1
+    },
+    "investigation_feedback": {
+      "keys": {
+        "investigation|fb-test-1": "814362e89cf46b0a66f7ea7decb156dd372679cfde5248cc79478034ac705802",
+        "proposal|pfb-1": "4e6fa67a0ffc139bcf4018c2a76d8907c06191237e025279a5126b1c46289d87"
+      },
+      "last_key": "proposal|pfb-1",
+      "row_count": 2
+    },
+    "investigations": {
+      "keys": {
+        "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z": "d3d4b1ac6fbde9c0da1790c51f65fb4b96f1adfb57b3e9187227f68dda1012f6"
+      },
+      "last_key": "inv|inc_astronomy_local_payment_20261012T090000.000000000Z|f749444429ac|20261012T090100.000000000Z",
+      "row_count": 1
+    },
+    "proposals": {
+      "keys": {
+        "prop-test-1": "28ed7dca14cf16acb0135e46692e90be62219c04c0a6239a9c7196c108817298"
+      },
+      "last_key": "prop-test-1",
+      "row_count": 1
+    }
+  }
+}
