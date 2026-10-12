@@ -1,6 +1,10 @@
 # LIVE SMOKE — optional Astronomy Shop stack on a GitHub-hosted runner.
 # workflow_dispatch only. NOT a required PR check. No schedule until stability
 # and cost are measured (Milestone C.5 / issue #26).
+#
+# Modes:
+#   smoke       — existing readiness + trace + Run Pulse API smoke
+#   live-fault  — Live Pulse baseline → shipping latency fault → incident → recovery
 name: Astronomy Smoke
 
 on:
@@ -10,6 +14,14 @@ on:
         description: 'Type run to start the isolated Astronomy Shop smoke (expensive)'
         required: true
         default: ''
+      mode:
+        description: 'smoke (default readiness/Run Pulse) or live-fault (Live Pulse fault lifecycle)'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - live-fault
 
 permissions:
   contents: read
@@ -23,7 +35,7 @@ jobs:
     name: Live Astronomy Shop
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    if: github.event.inputs.confirm == 'run'
+    if: github.event.inputs.confirm == 'run' && github.event.inputs.mode == 'smoke'
     env:
       GOTOOLCHAIN: auto
       ASTRONOMY_DEMO_PIN: '3.1.0'
@@ -95,5 +107,83 @@ jobs:
         with:
           name: astronomy-smoke-${{ github.run_id }}
           path: examples/astronomy-shop/.smoke-artifacts
+          if-no-files-found: ignore
+          retention-days: 7
+
+  live-fault:
+    name: Live Pulse Fault Lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    if: github.event.inputs.confirm == 'run' && github.event.inputs.mode == 'live-fault'
+    env:
+      GOTOOLCHAIN: auto
+      ASTRONOMY_DEMO_PIN: '3.1.0'
+      ASTRONOMY_MODE: minimal
+      ASTRONOMY_VERIFY_WAIT_SECS: '300'
+      ASTRONOMY_LIVE_FAULT_DEADLINE_SECS: '2700'
+      ASTRONOMY_MIN_DISK_KB: '8388608'
+      ASTRONOMY_MIN_MEM_KB: '3145728'
+      ASTRONOMY_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/examples/astronomy-shop/.smoke-artifacts/live-fault
+      # Live Pulse fault windows (bounded). DemoDetectConfig baseline ~2m.
+      ASTRONOMY_LIVE_FAULT_SCENARIO: 'latency-shipping-intl'
+      ASTRONOMY_LIVE_FAULT_SERVICE: 'astronomy/local/shipping'
+      ASTRONOMY_LIVE_FAULT_GRAPH_NODE: 'shipping'
+      ASTRONOMY_LIVE_FAULT_BASELINE_SECS: '180'
+      ASTRONOMY_LIVE_FAULT_FAULT_SECS: '150'
+      ASTRONOMY_LIVE_FAULT_RECOVER_SECS: '150'
+      ASTRONOMY_LIVE_FAULT_POLL_SECS: '10'
+      PERCH_LIVE_PULSE_PROM_URL: 'http://127.0.0.1:9090'
+      PERCH_LIVE_PULSE_POLL_INTERVAL: '15s'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.2'
+          cache: true
+          cache-dependency-path: go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Preflight runner resources
+        run: |
+          set -euo pipefail
+          df -h /
+          free -m || true
+          docker version
+          avail_kb="$(df -k / | awk 'NR==2{print $4}')"
+          mem_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
+          echo "disk_avail_kb=$avail_kb mem_available_kb=$mem_kb"
+          if [[ "$avail_kb" -lt "$ASTRONOMY_MIN_DISK_KB" ]]; then
+            echo "::error::Insufficient disk for live fault (avail_kb=$avail_kb)."
+            exit 1
+          fi
+          if [[ "$mem_kb" -lt "$ASTRONOMY_MIN_MEM_KB" ]]; then
+            echo "::error::Insufficient MemAvailable (mem_kb=$mem_kb)."
+            exit 1
+          fi
+
+      - name: Build perch
+        run: |
+          mkdir -p examples/astronomy-shop/.smoke-artifacts/live-fault
+          make web-deps web-build-embed
+          go build -o examples/astronomy-shop/.smoke-artifacts/live-fault/perch ./cmd/perch
+
+      - name: Run live fault lifecycle
+        run: |
+          chmod +x examples/astronomy-shop/scripts/ci-live-fault.sh
+          export PERCH_BIN="${{ github.workspace }}/examples/astronomy-shop/.smoke-artifacts/live-fault/perch"
+          ./examples/astronomy-shop/scripts/ci-live-fault.sh
+
+      - name: Upload live-fault artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: astronomy-live-fault-${{ github.run_id }}
+          path: examples/astronomy-shop/.smoke-artifacts/live-fault
           if-no-files-found: ignore
           retention-days: 7
