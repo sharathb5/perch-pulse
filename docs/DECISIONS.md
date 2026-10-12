@@ -28,6 +28,33 @@ Rules:
 
 ---
 
+## ADR-026: Offline investigation evaluation harness (Milestone F2b)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F2a adds optional LLM proposals. We need reproducible comparison
+against F1 deterministic investigations on identical evidence without paid
+provider calls, ground-truth leakage into generation, or invented model scores.
+
+**Decision:**
+1. Versioned cases (`pulse.investigation.eval_case.v1`) separate
+   `generation` inputs, `annotations`, and `hidden_ground_truth`.
+2. Offline runner (`perch pulse investigation-eval`) scores mechanical metrics
+   with explicit denominators; default dataset is synthetic fixtures including
+   optional `synthetic_fixture` proposals.
+3. No LLM-as-judge. Semantic support uses a documented human rubric.
+4. Missing stored proposals → unavailable (not fabricated performance).
+5. Human feedback summaries are subjective usefulness only, never verified truth.
+
+**Consequences:** CI can run the harness without credentials. Live-provider eval
+remains an explicit future opt-in outside this milestone.
+
+**Alternatives considered:** Auto-calling providers during eval (rejected: cost/
+nondeterminism); treating feedback as ground truth (rejected: trust boundary);
+single blended score without denominators (rejected: score inflation risk).
+
 ## ADR-025: Constrained optional LLM investigator (Milestone F2a)
 
 **Date:** 2026-10-12  
