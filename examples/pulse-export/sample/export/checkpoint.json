@@ -21,47 +21,31 @@
     },
     "eval_case_results": {
       "keys": {
-        "evalrun_1382c782e0cc156e9e8ec23e|case_call_rate_decline": "39898ec392e969ce9fd16aec973df02680d3ac83160a3d90a31365eb6dcfb573",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_incomplete_run_pulse": "478d111bc05b8c1d09dc07aef476a898479ce17a0b10c3cf654efe24481c3084",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_insufficient_evidence": "598a468c340881fc3eca2d65a24b1792b74fb2bd58c95f42885b40403c8a8fcb",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_misleading_metadata": "7b3f9092cb0e92cba136905c3bad452d9b643efc4d2c4ae44a59e6eeae2ba27e",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_missing_baseline": "d7bb9c1889bd45237c71b1e783a0e5719b5468c421eac5ddcdcc4f476e88e4d7",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_multiple_changes": "0853ebdd0d6a9920557e5200385457b89760fe5f7e5f78ecc9a6c6805cf0749b",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_no_changes": "9a8f48601e8fff5f29d6dfdbb9fba704f90c788071b7e0e6a2bd1d937b77cb10",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_payment_error": "fbf4e41c41851cc7e5569da390ada58101fb167d9aebd19ee128ccdf7eec08d9",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_prompt_injection": "0ec3a50d86c959978057dadfabb0dae9bd8a9e19a4fdd3fbedaf66bb6b360b5f",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_recovered": "3596f7f6009105af82d885b858fbf8bc2722b30adc05932b638fc0ad54e68d76",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_shipping_latency": "7c55a3a554b55e20f2740a11fef12bff9cedb8478bded67830221d98057b8e20",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_stale_telemetry": "5523a9bf65eb7f831bad3aad63f056da57ec1309908a605eabf31b8faa7ce256",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_unmapped_service": "3dce074f8e52cb050f9985db36fe324c98d69dc33d65c55de074969ded31dfd6",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_unrelated_change": "33e130781db5c6627607b8d866d4d14b50177bb1f7801cea55fe7c0fb9bfe22b",
-        "evalrun_1382c782e0cc156e9e8ec23e|case_weak_correlation": "315bbc002fa812e76f5c8d398c002ad103261039e324e08df6a54ea709fd3030",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_call_rate_decline": "92a9a91ba887c58d7c5a343c13817855215fe6e483aba18c67478bedd13d1b94",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_incomplete_run_pulse": "497537609b542d30a8fa2d9613ab2b42541e216246e9ae51977c99724d90e205",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_insufficient_evidence": "e349107d25124241fd493889426fd87a306d87088aba7bdc15f71702d7c9be5b",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_misleading_metadata": "e431d31c515c58752bf4d001844cfc909615f6b84e6601f1e034302c1f4eae48",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_missing_baseline": "7c90ef9a0ef1d237f9b88fb1e3d099f2e96800132d6c3421336eff24c5dd2a54",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_multiple_changes": "aa305f92cd32500ac0ca1c05ac8555f842fb434ebac8d3104e0e931551a3a0fb",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_no_changes": "d9e2bb6531eff878bad93533514849581bb4a0296a2ab72e594f3e72e7283627",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_payment_error": "78fac979c01ce7a9d33182523c607256c285e3e9d91b2e781cfa83fe8e27f92f",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_prompt_injection": "5730df62109feb34dbfecdcd38983f33641daac0e6855cfd30bd250cf778acdd",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_recovered": "b84f0fa6df0abd2e7870963b3ccd453bc96316cc8ee6b9fca4d8cb2381770b4c",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_shipping_latency": "9e84d69e13bc0c77226d4c74ea9b92dd88e2e5045300c5c272cef3c18d4a5e76",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_stale_telemetry": "8259ed15d2da0ceb69c56aba15865cc8c98f0c66677411e58462a51741df4576",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_unmapped_service": "df742f2dfb712eedb28b922a987384c03d3384b12ef8b5c0af82f0d1d43917ad",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_unrelated_change": "22487340ff9c58899752941b2d0a4e2cd6985359826c7b21a3293045dca6ae18",
-        "evalrun_6b70916f5a3f8c41cc1b68b3|case_weak_correlation": "8bcce6d1ee69d5a04c71f959fb863d9e897bd791aa79a26ad849bad74230ddd7"
+        "evalrun_01d19deaf173051e769365b0|case_call_rate_decline": "f8f92d668619fc10d74e6a31effad7ae3e0eac91178eea21309569d6f0ff984e",
+        "evalrun_01d19deaf173051e769365b0|case_incomplete_run_pulse": "e1ac545cff695569cb212546bce5ac1cc77dd30a428cfebf7ddc758ab3d7646f",
+        "evalrun_01d19deaf173051e769365b0|case_insufficient_evidence": "0c750cebdac43ef2280db356b8b84ffd5da5ad714f1e9d035f0da042e454b585",
+        "evalrun_01d19deaf173051e769365b0|case_misleading_metadata": "9e96400e2e55dd4c1f908368ec87c3aa5b93cb6845e6bc2635888a3a96dc46ca",
+        "evalrun_01d19deaf173051e769365b0|case_missing_baseline": "97cccfc440463d755d8d960cc4659cfe69093d9bfe19984e2d2f1b75f3ac25ee",
+        "evalrun_01d19deaf173051e769365b0|case_multiple_changes": "45e22036c8ed5fd2229775135d71d9ab6fc8fda921b6e2161373939a7fc67cc9",
+        "evalrun_01d19deaf173051e769365b0|case_no_changes": "97200fa8ffacea63f55222b2f7085a19e323de1d7702c7ef2ed6350c5c780e64",
+        "evalrun_01d19deaf173051e769365b0|case_payment_error": "fd65e12602ffeba1dc4a02b3ee1b9435ca1e7002ac43849b3baf18f291df32da",
+        "evalrun_01d19deaf173051e769365b0|case_prompt_injection": "c6a0029a68e0eed867e03e8f3314bffd946d4af144f6704427021a6dffff58c3",
+        "evalrun_01d19deaf173051e769365b0|case_recovered": "654b0494c5c07d0ef99f561e7d17791243bde35b8082212466b40018d5f45602",
+        "evalrun_01d19deaf173051e769365b0|case_shipping_latency": "1adb1790b5b0eedd31db1f7e7a7e9b99bd834a1641911025bdeb1406b1d02ccc",
+        "evalrun_01d19deaf173051e769365b0|case_stale_telemetry": "7f047a55662eb1e30f0cfea4df0621092682989f78a91ff3a5d8cafd80748e5c",
+        "evalrun_01d19deaf173051e769365b0|case_unmapped_service": "99647d9b28f17bd88998440a71b315c2dbc23d569e0bce7adfe3ab0e3619f3b0",
+        "evalrun_01d19deaf173051e769365b0|case_unrelated_change": "3a3a0d8b4f8abaf3d15131edd7bde0c0b5cb2873c5c9990acb88637d089a7d43",
+        "evalrun_01d19deaf173051e769365b0|case_weak_correlation": "94d682ca43da6caae8e429a863e68524b17db56fc9b49940ed4478c3289318a6"
       },
-      "last_key": "evalrun_6b70916f5a3f8c41cc1b68b3|case_weak_correlation",
-      "row_count": 30
+      "last_key": "evalrun_01d19deaf173051e769365b0|case_weak_correlation",
+      "row_count": 15
     },
     "eval_runs": {
       "keys": {
-        "evalrun_1382c782e0cc156e9e8ec23e": "8225322625c63e5d3a3f195a439e6509356eca959a95c02a484e3276e9390a17",
-        "evalrun_6b70916f5a3f8c41cc1b68b3": "ed44092ba6fcd87f9ff47be4383ff04f60fbec2e645044a7fcd19ad0bb59cac8"
+        "evalrun_01d19deaf173051e769365b0": "94d99a2d7ad99231f33f7106376feff3e2bdaec05f9f7ceee3b1524541d677e0"
       },
-      "last_key": "evalrun_6b70916f5a3f8c41cc1b68b3",
-      "row_count": 2
+      "last_key": "evalrun_01d19deaf173051e769365b0",
+      "row_count": 1
     },
     "hypotheses": {
       "keys": {

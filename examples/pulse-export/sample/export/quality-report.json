@@ -1,18 +1,18 @@
 {
   "schema_version": "pulse.export.quality_report.v1",
   "export_schema_version": "pulse.export.analytics.v1",
-  "generated_at": "2026-10-12T16:47:33.192604Z",
+  "generated_at": "2026-10-12T16:48:50.239322Z",
   "ok": true,
   "dataset_counts": {
-    "citations": 20,
-    "eval_case_results": 30,
-    "eval_runs": 2,
-    "hypotheses": 8,
-    "incident_signals": 4,
-    "incidents": 2,
-    "investigation_feedback": 4,
-    "investigations": 2,
-    "proposals": 2
+    "citations": 10,
+    "eval_case_results": 15,
+    "eval_runs": 1,
+    "hypotheses": 4,
+    "incident_signals": 2,
+    "incidents": 1,
+    "investigation_feedback": 2,
+    "investigations": 1,
+    "proposals": 1
   },
   "checks": {
     "checkpoint": true,

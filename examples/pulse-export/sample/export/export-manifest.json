@@ -41,12 +41,12 @@
     },
     {
       "name": "eval_runs",
-      "row_count": 2,
+      "row_count": 1,
       "file": "eval_runs.jsonl"
     },
     {
       "name": "eval_case_results",
-      "row_count": 30,
+      "row_count": 15,
       "file": "eval_case_results.jsonl"
     }
   ],
