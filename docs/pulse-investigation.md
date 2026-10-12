@@ -194,6 +194,11 @@ Package `internal/pulse/investigation/eval` provides:
 
 See [ADR-026](DECISIONS.md) and `examples/astronomy-shop/eval/investigation/`.
 
+**F3a analytical export** (`perch pulse export-analytics`): versioned JSONL datasets
+for incidents, investigations, hypotheses, citations, feedback, proposals, and
+optional eval reports — local incremental checkpoint, no Databricks. See
+[pulse-export.md](pulse-export.md) and [ADR-027](DECISIONS.md).
+
 ## Security
 
 - Mutating POSTs: loopback + Origin checks (same pattern as Run Pulse)

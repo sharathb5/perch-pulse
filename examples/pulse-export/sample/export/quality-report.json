@@ -1,0 +1,32 @@
+{
+  "schema_version": "pulse.export.quality_report.v1",
+  "export_schema_version": "pulse.export.analytics.v1",
+  "generated_at": "2026-10-12T16:47:33.192604Z",
+  "ok": true,
+  "dataset_counts": {
+    "citations": 20,
+    "eval_case_results": 30,
+    "eval_runs": 2,
+    "hypotheses": 8,
+    "incident_signals": 4,
+    "incidents": 2,
+    "investigation_feedback": 4,
+    "investigations": 2,
+    "proposals": 2
+  },
+  "checks": {
+    "checkpoint": true,
+    "checkpoint_load": true,
+    "fingerprints": true,
+    "joins": true,
+    "redaction": true,
+    "schema_compliance": true,
+    "stable_ids": true,
+    "timestamps": true
+  },
+  "notes": [
+    "Validation is local-only; it does not execute Databricks jobs.",
+    "Join checks use exported IDs present in this directory only.",
+    "Both eval_case_results and incidents present: filter by provenance_class before analytical joins."
+  ]
+}
