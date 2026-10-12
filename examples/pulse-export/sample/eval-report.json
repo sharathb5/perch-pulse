@@ -1,6 +1,6 @@
 {
   "schema_version": "pulse.investigation.eval_report.v1",
-  "generated_at": "2026-10-12T16:47:33.119329Z",
+  "generated_at": "2026-10-12T16:48:50.177931Z",
   "dataset_id": "pulse.investigation.eval.astronomy_fixtures.v1",
   "mode": "offline",
   "cases": [
