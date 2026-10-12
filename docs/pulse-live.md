@@ -91,24 +91,10 @@ Reuses `detect.Detector` + `incident.Build`. Persistence uses
 - Fixture/integration tests prove the chain; live Astronomy Shop Docker is not
   a PR-required gate (see smoke follow-up in UI PR).
 
-## UI consumption (Part 2)
-
-The React viz polls `GET /api/pulse/live/*` on the same interval as historical
-Pulse (≈8s). Overview shows a **Live telemetry** section; graph nodes with a
-fresh live regression set `data-live-pulse="regression"` and Pulse kind
-`live_regression` (does not replace StatusPill or Run Pulse amber rings).
-
-Fixtures under `web/fixtures/pulse.live.*.json` are regenerated from the Go API:
-
-```bash
-UPDATE_LIVE_FIXTURES=1 go test ./internal/pulse/live/test/ -run TestWriteLiveUIFixtures
-```
-
 ## Local verification
 
 ```bash
 go test ./internal/pulse/live/test/... ./internal/pulse/telem/... -count=1
 make pulse-integration
-cd web && npm test && npm run test:e2e
 make verify
 ```
