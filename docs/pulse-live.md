@@ -77,6 +77,52 @@ Reuses `detect.Detector` + `incident.Build`. Persistence uses
 | Live Pulse | `GET /api/pulse/live/*` |
 | Run Pulse | `GET /api/pulse/workflows`, `POST /api/pulse/runs` |
 
+## Fault-to-recovery validation
+
+Deterministic coverage (in `make verify` / `go test ./internal/pulse/live/test/...`):
+
+- `TestLive_FaultLifecycle_ShippingLatency` — httptest Prometheus fixture →
+  baseline → shipping latency spike → active incident → missing≠recovery →
+  measured recovery → historical `incident_id` continuity via live API.
+- Sibling tests: no duplicate incidents, absence≠recovery, provider outage
+  retains snapshot (stale≠healthy).
+
+### Live Astronomy Shop scenario (CI `live-fault`)
+
+**Selected for CI (evidence-based):** `error-payment` — ambient Locust traffic
+reliably exercises checkout→payment; `paymentFailure=50%` produces `error_rate`
+above detector floors (`delta≥0.10`, current≥`0.05`) without changing thresholds.
+
+| Field | Value |
+|-------|-------|
+| Scenario id (flagd only) | `error-payment` |
+| Flag | `paymentFailure=50%` |
+| Target Pulse service | `astronomy/local/payment` |
+| Graph node | `payment` |
+| Expected signal | `error_rate` |
+| Traffic | Demo load-generator ambient checkout (no custom generator) |
+| Baseline wait | minimum 180s wall clock **and** fresh target baseline |
+| Fault window | ≤180s |
+| Recovery window | ≤150s |
+| Max job | ~45–50 min including stack start |
+
+**Preferred product-wise but not used in CI live-fault:** `latency-shipping-intl`
+(`intlShippingSlowdown=10sec` → `astronomy/local/shipping` / `latency_ms`). First
+CI attempt ([run 38202773957](https://github.com/sharathb5/perch-pulse/actions/runs/38202773957))
+ingested real shipping telemetry (baseline p99 ≈9.8 ms → fault ≈45 ms) but never
+cleared `LatencyAbsMinMS=1000`. Sparse international addresses diluted spanmetrics
+p99; thresholds were **not** lowered.
+
+Scenario labels must **never** appear in Live Pulse API responses. Injection uses
+`internal/pulse/scenario` harness only.
+
+Live run (manual, not a PR gate):
+
+```bash
+# GitHub Actions → Astronomy Smoke → mode=live-fault, confirm=run
+./examples/astronomy-shop/scripts/ci-live-fault.sh
+```
+
 ## Limitations (MVP)
 
 - Process restart clears rolling baselines; open files remain but a continuing
@@ -88,8 +134,11 @@ Reuses `detect.Detector` + `incident.Build`. Persistence uses
 - Error-rate PromQL uses `clamp_min(..., 1)` on the call denominator (pre-existing
   spanmetrics query); very low traffic can understate ratios — documented, not
   silently treated as healthy zeros for unobserved services.
-- Fixture/integration tests prove the chain; live Astronomy Shop Docker is not
-  a PR-required gate (see smoke follow-up in UI PR).
+- Fixture/integration tests prove the chain; live Astronomy Shop Docker fault
+  lifecycle is `workflow_dispatch` only (`mode=live-fault`), never required for PRs.
+- International shipping paths can be sparse; if the live run cannot qualify a
+  shipping latency regression within the fault budget, fail honestly and keep
+  artifacts — do not inject Prom fixtures into the live verifier.
 
 ## Local verification
 

@@ -28,6 +28,37 @@ Rules:
 
 ---
 
+## ADR-024: Live Pulse fault-to-recovery validation (fixture + optional live smoke)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** After Live Pulse backend (ADR-022) and UI, we need proof of
+baseline → regression → active incident → recovery → historical evidence without
+a second detector or Databricks/agent workflows.
+
+**Decision:**
+1. Deterministic Go integration tests drive real `telem` → `detect` → `incident` →
+   live API packages with an httptest Prometheus fixture and controlled clock
+   (shipping latency as the preferred target).
+2. Optional `workflow_dispatch` Astronomy Smoke mode `live-fault` runs the pinned
+   demo, enables Live Pulse against loopback Prometheus, injects
+   `latency-shipping-intl` via flagd harness only, and asserts live API incident
+   lifecycle — never required for PRs.
+3. Screenshot baselines for post-merge Live Telemetry UI diffs are updated from
+   Linux CI Chromium actuals after manual review; wrong-tab live regression
+   baseline corrected.
+
+**Consequences:** `make verify` covers lifecycle negative controls; live fault
+proof depends on runner disk/RAM and ambient load-generator traffic. Sparse
+international shipping paths may fail the live job honestly without Prom
+injection.
+
+**Alternatives considered:** Injecting Prom fixtures into the live verifier
+(rejected: dishonest); making live-fault a required PR check (rejected: cost/
+flakiness); lowering detector thresholds for CI (rejected: masks real gaps).
+
 ## ADR-022: Live Pulse runtime inside perch viz (opt-in)
 
 **Date:** 2026-10-11  
