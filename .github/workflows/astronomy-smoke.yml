@@ -125,11 +125,13 @@ jobs:
       ASTRONOMY_MIN_MEM_KB: '3145728'
       ASTRONOMY_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/examples/astronomy-shop/.smoke-artifacts/live-fault
       # Live Pulse fault windows (bounded). DemoDetectConfig baseline ~2m.
-      ASTRONOMY_LIVE_FAULT_SCENARIO: 'latency-shipping-intl'
-      ASTRONOMY_LIVE_FAULT_SERVICE: 'astronomy/local/shipping'
-      ASTRONOMY_LIVE_FAULT_GRAPH_NODE: 'shipping'
+      # error-payment: shipping intl slowdown left p99 ~45ms in CI (< LatencyAbsMinMS=1000).
+      ASTRONOMY_LIVE_FAULT_SCENARIO: 'error-payment'
+      ASTRONOMY_LIVE_FAULT_SERVICE: 'astronomy/local/payment'
+      ASTRONOMY_LIVE_FAULT_GRAPH_NODE: 'payment'
+      ASTRONOMY_LIVE_FAULT_SIGNAL: 'error_rate'
       ASTRONOMY_LIVE_FAULT_BASELINE_SECS: '180'
-      ASTRONOMY_LIVE_FAULT_FAULT_SECS: '150'
+      ASTRONOMY_LIVE_FAULT_FAULT_SECS: '180'
       ASTRONOMY_LIVE_FAULT_RECOVER_SECS: '150'
       ASTRONOMY_LIVE_FAULT_POLL_SECS: '10'
       PERCH_LIVE_PULSE_PROM_URL: 'http://127.0.0.1:9090'

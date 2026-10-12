@@ -137,16 +137,17 @@ SMOKE_BIN="$ARTIFACT_DIR/live-fault-smoke"
   --viz-base-url "http://127.0.0.1:${VIZ_PORT}" \
   --flagd-api-base "${ASTRONOMY_FLAGD_API_BASE:-$BASE_URL/feature/api}" \
   --artifact-dir "$ARTIFACT_DIR" \
-  --scenario-id "${ASTRONOMY_LIVE_FAULT_SCENARIO:-latency-shipping-intl}" \
-  --target-service "${ASTRONOMY_LIVE_FAULT_SERVICE:-astronomy/local/shipping}" \
-  --target-graph-node "${ASTRONOMY_LIVE_FAULT_GRAPH_NODE:-shipping}" \
+  --scenario-id "${ASTRONOMY_LIVE_FAULT_SCENARIO:-error-payment}" \
+  --target-service "${ASTRONOMY_LIVE_FAULT_SERVICE:-astronomy/local/payment}" \
+  --target-graph-node "${ASTRONOMY_LIVE_FAULT_GRAPH_NODE:-payment}" \
+  --expect-signal "${ASTRONOMY_LIVE_FAULT_SIGNAL:-error_rate}" \
   --baseline-secs "${ASTRONOMY_LIVE_FAULT_BASELINE_SECS:-180}" \
-  --fault-secs "${ASTRONOMY_LIVE_FAULT_FAULT_SECS:-150}" \
+  --fault-secs "${ASTRONOMY_LIVE_FAULT_FAULT_SECS:-180}" \
   --recover-secs "${ASTRONOMY_LIVE_FAULT_RECOVER_SECS:-150}" \
   --poll-secs "${ASTRONOMY_LIVE_FAULT_POLL_SECS:-10}" \
   --scenario-results-dir "$ARTIFACT_DIR/scenario-results" \
   | tee "$ARTIFACT_DIR/live-fault-smoke.log"
 
 ok "Live fault lifecycle smoke completed"
-note "Claimed: real Prom ingest → baseline → shipping latency fault → live incident → recovery historical."
-note "Not claimed: Databricks, agent workflows, or Run Pulse fault detection."
+note "Claimed: real Prom ingest → baseline → payment error_rate fault → live incident → recovery historical."
+note "Not claimed: shipping intl latency under CI ambient load; Databricks; agent workflows."

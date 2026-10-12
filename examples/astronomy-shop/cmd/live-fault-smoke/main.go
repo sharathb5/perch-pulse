@@ -38,12 +38,13 @@ func run() error {
 		vizBase         = flag.String("viz-base-url", "http://127.0.0.1:18765", "perch viz loopback base")
 		flagdBase       = flag.String("flagd-api-base", "http://127.0.0.1:8080/feature/api", "flagd-ui API base")
 		artifactDir     = flag.String("artifact-dir", "", "bounded diagnostics directory")
-		scenarioID      = flag.String("scenario-id", "latency-shipping-intl", "catalog fault scenario")
-		targetService   = flag.String("target-service", "astronomy/local/shipping", "expected Pulse service_id")
-		targetGraph     = flag.String("target-graph-node", "shipping", "expected graph node id")
+		scenarioID      = flag.String("scenario-id", "error-payment", "catalog fault scenario")
+		targetService   = flag.String("target-service", "astronomy/local/payment", "expected Pulse service_id")
+		targetGraph     = flag.String("target-graph-node", "payment", "expected graph node id")
+		expectSignal    = flag.String("expect-signal", "error_rate", "required finding signal_type on the opened incident")
 		baselineSecs    = flag.Int("baseline-secs", 180, "minimum baseline wait before fault injection")
-		faultSecs       = flag.Int("fault-secs", 120, "max wait for active incident after fault")
-		recoverSecs     = flag.Int("recover-secs", 120, "max wait for recovery after fault clear")
+		faultSecs       = flag.Int("fault-secs", 180, "max wait for active incident after fault")
+		recoverSecs     = flag.Int("recover-secs", 150, "max wait for recovery after fault clear")
 		pollSecs        = flag.Int("poll-secs", 10, "live API poll interval")
 		scenarioResults = flag.String("scenario-results-dir", "", "harness results dir (gitignored)")
 	)
@@ -74,12 +75,14 @@ func run() error {
 		"scenario_id=" + *scenarioID + " (injection only; must not appear in live API)",
 		"target_service=" + *targetService,
 		"target_graph_node=" + *targetGraph,
+		"expect_signal=" + *expectSignal,
 		"baseline_secs_min=" + fmt.Sprintf("%d", *baselineSecs),
 		"fault_secs=" + fmt.Sprintf("%d", *faultSecs),
 		"recover_secs=" + fmt.Sprintf("%d", *recoverSecs),
 		"poll_secs=" + fmt.Sprintf("%d", *pollSecs),
 		"note=Observes real Prometheus via Live Pulse; does not inject metric fixtures.",
-		"note=Requires latency_ms signal evidence on the opened incident.",
+		"note=Requires expect_signal on the opened incident (default error_rate for error-payment).",
+		"note=latency-shipping-intl preferred product-wise; CI ambient load left shipping p99 at ~45ms (< LatencyAbsMinMS=1000).",
 	}, "\n")+"\n")
 
 	client := &http.Client{Timeout: 15 * time.Second}
@@ -123,11 +126,11 @@ func run() error {
 	}
 	ok("Live Pulse enabled state=%s", st.Status.State)
 
-	// Record pre-fault latency for comparison.
-	var baselineLatency *float64
+	// Record pre-fault signal for comparison (latency_ms or error_rate depending on expect-signal).
+	var baselineSignal *float64
 	baselineStart := time.Now()
 	minBaseline := time.Duration(*baselineSecs) * time.Second
-	note("waiting ≥%ds for latency baseline on %s (ceiling + readiness)", *baselineSecs, *targetService)
+	note("waiting ≥%ds for %s baseline on %s (ceiling + readiness)", *baselineSecs, *expectSignal, *targetService)
 	deadline := baselineStart.Add(minBaseline + 60*time.Second) // small grace after minimum
 	var baselineReadyAt time.Time
 	for {
@@ -155,9 +158,9 @@ func run() error {
 			if err := assertNoScenarioLeak(iv); err != nil {
 				return err
 			}
-			if iv.PrimaryService == *targetService && iv.Lifecycle == "active" {
+			if iv.PrimaryService == *targetService && iv.Lifecycle == "active" && hasSignal(iv.SignalTypes, *expectSignal) {
 				writeJSON(*artifactDir, "live-incidents-premature.json", incs)
-				return fmt.Errorf("active incident on %s during baseline wait — refusing fault injection", *targetService)
+				return fmt.Errorf("active %s incident on %s during baseline wait — refusing fault injection", *expectSignal, *targetService)
 			}
 		}
 		elapsed := time.Since(baselineStart)
@@ -169,9 +172,15 @@ func run() error {
 			if s.GraphNode != "" && s.GraphNode != *targetGraph {
 				return fmt.Errorf("graph_node=%q want %q", s.GraphNode, *targetGraph)
 			}
-			lat := signalValue(s, "latency_ms")
-			if lat != nil && s.BaselineReady && s.Freshness == "fresh" {
-				baselineLatency = lat
+			sig := signalValue(s, *expectSignal)
+			// error_rate may be present as 0 when call_rate observed; latency must be non-nil.
+			if s.BaselineReady && s.Freshness == "fresh" && (sig != nil || *expectSignal == "error_rate") {
+				if sig != nil {
+					baselineSignal = sig
+				} else {
+					z := 0.0
+					baselineSignal = &z
+				}
 				targetOK = true
 			}
 		}
@@ -179,14 +188,14 @@ func run() error {
 			baselineReadyAt = time.Now().UTC()
 			writeJSON(*artifactDir, "live-status-baseline-ready.json", st)
 			writeJSON(*artifactDir, "live-services-baseline-ready.json", svcs)
-			if baselineLatency != nil {
-				writeFile(*artifactDir, "baseline-latency.txt", fmt.Sprintf("latency_ms=%.4f\n", *baselineLatency))
+			if baselineSignal != nil {
+				writeFile(*artifactDir, "baseline-signal.txt", fmt.Sprintf("%s=%.6f\n", *expectSignal, *baselineSignal))
 			}
 			break
 		}
 		time.Sleep(poll)
 	}
-	ok("baseline ready at %s after ≥%ds (latency_ms observed)", baselineReadyAt.Format(time.RFC3339), *baselineSecs)
+	ok("baseline ready at %s after ≥%ds (%s observed)", baselineReadyAt.Format(time.RFC3339), *baselineSecs, *expectSignal)
 
 	faultOn := time.Now().UTC()
 	rec, err := h.Start(ctx, *scenarioID)
@@ -196,10 +205,10 @@ func run() error {
 	writeFile(*artifactDir, "fault-on.txt", fmt.Sprintf("scenario=%s run_id=%s at=%s\n", rec.ScenarioID, rec.RunID, faultOn.Format(time.RFC3339Nano)))
 	ok("fault activated via flagd (scenario harness); labels stay out of Pulse API")
 
-	note("waiting up to %ds for active latency_ms incident on %s", *faultSecs, *targetService)
+	note("waiting up to %ds for active %s incident on %s", *faultSecs, *expectSignal, *targetService)
 	deadline = time.Now().Add(time.Duration(*faultSecs) * time.Second)
 	var incidentID string
-	var duringLatency *float64
+	var duringSignal *float64
 	for {
 		if time.Now().After(deadline) {
 			incs, _ := getLiveIncidents(ctx, client, base)
@@ -208,7 +217,7 @@ func run() error {
 			writeJSON(*artifactDir, "live-incidents-fault-timeout.json", incs)
 			writeJSON(*artifactDir, "live-services-fault-timeout.json", svcs)
 			writeJSON(*artifactDir, "live-status-fault-timeout.json", st)
-			return fmt.Errorf("no qualified active latency_ms incident on %s within %ds after fault", *targetService, *faultSecs)
+			return fmt.Errorf("no qualified active %s incident on %s within %ds after fault", *expectSignal, *targetService, *faultSecs)
 		}
 		incs, err := getLiveIncidents(ctx, client, base)
 		if err != nil {
@@ -220,7 +229,7 @@ func run() error {
 		}
 		for _, s := range svcs.Services {
 			if s.ServiceID == *targetService {
-				duringLatency = signalValue(s, "latency_ms")
+				duringSignal = signalValue(s, *expectSignal)
 			}
 		}
 		for _, iv := range incs.Incidents {
@@ -233,11 +242,10 @@ func run() error {
 			if !iv.FirstDetected.IsZero() && iv.FirstDetected.Before(faultOn.Add(-30*time.Second)) {
 				continue
 			}
-			if !hasSignal(iv.SignalTypes, "latency_ms") {
-				continue // require latency evidence for this preferred fault
+			if !hasSignal(iv.SignalTypes, *expectSignal) {
+				continue // require the fault's signal evidence
 			}
-			if baselineLatency != nil && duringLatency != nil && *duringLatency <= *baselineLatency*1.5 && *duringLatency < *baselineLatency+200 {
-				// Telemetry must actually worsen; avoid unrelated errors masquerading.
+			if !signalWorsened(*expectSignal, baselineSignal, duringSignal) {
 				continue
 			}
 			incidentID = iv.IncidentID
@@ -253,7 +261,7 @@ func run() error {
 		}
 		time.Sleep(poll)
 	}
-	ok("active latency incident %s on %s", incidentID, *targetService)
+	ok("active %s incident %s on %s", *expectSignal, incidentID, *targetService)
 
 	faultOff := time.Now().UTC()
 	stopped, err := h.Stop(ctx, *scenarioID)
@@ -265,7 +273,7 @@ func run() error {
 		stopped.ScenarioID, stopped.RunID, stopped.RecoveryVerified, faultOff.Format(time.RFC3339Nano)))
 	ok("fault cleared (flag idle); waiting for measured recovery — not inferring from flag alone")
 
-	note("waiting up to %ds for incident %s to leave active with latency evidence", *recoverSecs, incidentID)
+	note("waiting up to %ds for incident %s to leave active with measured %s recovery", *recoverSecs, incidentID, *expectSignal)
 	deadline = time.Now().Add(time.Duration(*recoverSecs) * time.Second)
 	for {
 		if time.Now().After(deadline) {
@@ -281,10 +289,10 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("services: %w", err)
 		}
-		var afterLat *float64
+		var afterSig *float64
 		for _, s := range svcs.Services {
 			if s.ServiceID == *targetService && s.Freshness == "fresh" {
-				afterLat = signalValue(s, "latency_ms")
+				afterSig = signalValue(s, *expectSignal)
 			}
 		}
 		active := false
@@ -303,26 +311,23 @@ func run() error {
 				hist = true
 			}
 		}
-		// Require measured recovery: fresh latency near baseline when available.
-		latencyRecovered := afterLat != nil && baselineLatency != nil &&
-			*afterLat < *baselineLatency*2.0 && *afterLat < 2000
-		if !active && hist && (latencyRecovered || afterLat == nil && hist) {
-			// Prefer measured latency recovery; if series briefly missing, hist alone is insufficient.
-			if afterLat == nil {
-				time.Sleep(poll)
-				continue
-			}
-			if !latencyRecovered {
-				time.Sleep(poll)
-				continue
-			}
-			writeJSON(*artifactDir, "live-incidents-recovered.json", incs)
-			writeJSON(*artifactDir, "live-services-recovered.json", svcs)
-			break
+		if active || !hist {
+			time.Sleep(poll)
+			continue
 		}
-		time.Sleep(poll)
+		if afterSig == nil {
+			time.Sleep(poll)
+			continue
+		}
+		if !signalRecovered(*expectSignal, baselineSignal, afterSig) {
+			time.Sleep(poll)
+			continue
+		}
+		writeJSON(*artifactDir, "live-incidents-recovered.json", incs)
+		writeJSON(*artifactDir, "live-services-recovered.json", svcs)
+		break
 	}
-	ok("incident %s recovered/historical with measured latency recovery", incidentID)
+	ok("incident %s recovered/historical with measured %s recovery", incidentID, *expectSignal)
 
 	writeFile(*artifactDir, "live-fault-summary.txt", strings.Join([]string{
 		"result=PASS",
@@ -335,10 +340,49 @@ func run() error {
 		"scenario_injection=" + *scenarioID,
 		"note=Scenario id used for flagd only; absent from live API payloads.",
 		"note=Real Prometheus telemetry observed through Live Pulse runtime.",
-		"note=Required latency_ms on incident + measured recovery latency.",
+		"expect_signal=" + *expectSignal,
+		"note=Required expect_signal on incident + measured recovery.",
 	}, "\n")+"\n")
 	ok("live fault lifecycle verified")
 	return nil
+}
+
+// signalWorsened requires measured regression vs baseline for the expected signal.
+func signalWorsened(signal string, baseline, during *float64) bool {
+	if during == nil {
+		return false
+	}
+	base := 0.0
+	if baseline != nil {
+		base = *baseline
+	}
+	switch signal {
+	case "error_rate":
+		// Detector floors: delta≥0.10 and current≥0.05 — require clear rise.
+		return *during >= 0.05 && *during >= base+0.05
+	case "latency_ms":
+		return *during > base*1.5 && *during >= base+200
+	default:
+		return *during > base
+	}
+}
+
+func signalRecovered(signal string, baseline, after *float64) bool {
+	if after == nil {
+		return false
+	}
+	base := 0.0
+	if baseline != nil {
+		base = *baseline
+	}
+	switch signal {
+	case "error_rate":
+		return *after < 0.05 || *after <= base+0.02
+	case "latency_ms":
+		return *after < base*2.0 && *after < 2000
+	default:
+		return true
+	}
 }
 
 func signalValue(s live.ServiceView, name string) *float64 {

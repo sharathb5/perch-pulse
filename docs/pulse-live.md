@@ -87,20 +87,31 @@ Deterministic coverage (in `make verify` / `go test ./internal/pulse/live/test/.
 - Sibling tests: no duplicate incidents, absence≠recovery, provider outage
   retains snapshot (stale≠healthy).
 
-### Preferred live Astronomy Shop scenario
+### Live Astronomy Shop scenario (CI `live-fault`)
+
+**Selected for CI (evidence-based):** `error-payment` — ambient Locust traffic
+reliably exercises checkout→payment; `paymentFailure=50%` produces `error_rate`
+above detector floors (`delta≥0.10`, current≥`0.05`) without changing thresholds.
 
 | Field | Value |
 |-------|-------|
-| Scenario id (flagd only) | `latency-shipping-intl` |
-| Flag | `intlShippingSlowdown=10sec` |
-| Target Pulse service | `astronomy/local/shipping` |
-| Graph node | `shipping` |
-| Expected signal | `latency_ms` (p99 spanmetrics) |
+| Scenario id (flagd only) | `error-payment` |
+| Flag | `paymentFailure=50%` |
+| Target Pulse service | `astronomy/local/payment` |
+| Graph node | `payment` |
+| Expected signal | `error_rate` |
 | Traffic | Demo load-generator ambient checkout (no custom generator) |
-| Baseline wait | minimum 180s wall clock **and** fresh `latency_ms` baseline on shipping |
-| Fault window | ≤150s |
+| Baseline wait | minimum 180s wall clock **and** fresh target baseline |
+| Fault window | ≤180s |
 | Recovery window | ≤150s |
 | Max job | ~45–50 min including stack start |
+
+**Preferred product-wise but not used in CI live-fault:** `latency-shipping-intl`
+(`intlShippingSlowdown=10sec` → `astronomy/local/shipping` / `latency_ms`). First
+CI attempt ([run 38202773957](https://github.com/sharathb5/perch-pulse/actions/runs/38202773957))
+ingested real shipping telemetry (baseline p99 ≈9.8 ms → fault ≈45 ms) but never
+cleared `LatencyAbsMinMS=1000`. Sparse international addresses diluted spanmetrics
+p99; thresholds were **not** lowered.
 
 Scenario labels must **never** appear in Live Pulse API responses. Injection uses
 `internal/pulse/scenario` harness only.
