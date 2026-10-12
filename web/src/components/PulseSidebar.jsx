@@ -666,7 +666,13 @@ function EvidenceInvestigationReport({
   setFeedbackRationale,
   feedbackStatus,
   onSubmitFeedback,
+  llmStatus,
+  llmProposal,
+  llmLoading,
+  llmError,
+  onGenerateLLM,
 }) {
+  const llmAvailable = Boolean(llmStatus?.available)
   return (
     <section data-testid="pulse-evidence-investigation" className="space-y-2 rounded border border-gray-200 bg-white px-2 py-2">
       <div className="flex items-center justify-between gap-2">
@@ -676,7 +682,7 @@ function EvidenceInvestigationReport({
       <p className="font-mono text-[10px] text-gray-500 break-all">{investigation.investigationId}</p>
       <p className="text-[10px] text-gray-500">
         State {investigation.incidentState || '—'} · freshness {investigation.evidenceFreshness || '—'} ·{' '}
-        {investigation.generationMethod || 'deterministic'}
+        <span data-testid="pulse-method-deterministic">{investigation.generationMethod || 'deterministic'}</span>
       </p>
       <p data-testid="pulse-evidence-not-diagnosed" className="text-[10px] text-amber-800">
         Report generated ≠ diagnosed. Hypotheses are INFERRED.
@@ -748,6 +754,77 @@ function EvidenceInvestigationReport({
         </ul>
       </div>
 
+      <div data-testid="pulse-llm-investigation" className="space-y-1 border-t border-gray-100 pt-2">
+        <div className="flex items-center gap-1">
+          <h4 className="text-[10px] uppercase tracking-wide text-gray-400">AI investigation (optional)</h4>
+          <ClassificationBadge label="INFERRED" />
+        </div>
+        <p className="text-[10px] text-gray-500">
+          Generates a separate validated proposal. Does not replace the deterministic report or confirm
+          root cause.
+        </p>
+        {!llmAvailable && (
+          <p data-testid="pulse-llm-unavailable" className="text-[10px] text-gray-500">
+            {llmStatus?.reason ||
+              'LLM investigation unavailable. Server must opt in with credentials; deterministic investigation still works.'}
+          </p>
+        )}
+        <button
+          type="button"
+          data-testid="pulse-llm-generate-btn"
+          onClick={onGenerateLLM}
+          disabled={!llmAvailable || llmLoading}
+          className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {llmLoading ? 'Generating AI proposal…' : 'Generate AI Investigation'}
+        </button>
+        {llmError && (
+          <p data-testid="pulse-llm-error" className="text-red-600">
+            {llmError}
+          </p>
+        )}
+        {llmProposal && (
+          <div data-testid="pulse-llm-proposal" className="space-y-1 rounded border border-amber-100 bg-amber-50/30 px-2 py-1.5">
+            <p className="font-mono text-[10px] text-gray-500 break-all">{llmProposal.proposalId}</p>
+            <p className="text-[10px] text-gray-500">
+              method <span data-testid="pulse-method-llm">{llmProposal.generationMethod}</span>
+              {llmProposal.provenance?.model ? ` · model ${llmProposal.provenance.model}` : ''}
+            </p>
+            <p data-testid="pulse-llm-not-diagnosed" className="text-[10px] text-amber-800">
+              AI proposal ≠ confirmed diagnosis.
+            </p>
+            <ul className="space-y-1">
+              {(llmProposal.hypotheses ?? []).map((h) => (
+                <li key={h.hypothesisId} className="text-gray-800">
+                  <div className="font-mono text-[10px] text-gray-500">
+                    {h.hypothesisId}
+                    {h.supportStatus ? ` · ${h.supportStatus}` : ''}
+                  </div>
+                  <p>{h.statement}</p>
+                  {h.supportStatus === 'validated' && (
+                    <p className="text-[10px] text-gray-500">
+                      Citations resolve mechanically — not proof the wording is entailed.
+                    </p>
+                  )}
+                  {(h.supportingEvidenceRefs ?? []).length > 0 && (
+                    <p className="font-mono text-[10px] text-gray-500">
+                      evidence: {(h.supportingEvidenceRefs ?? []).slice(0, 4).join(', ')}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {(llmProposal.unknowns ?? []).length > 0 && (
+              <ul className="list-disc pl-4 text-[10px] text-gray-600">
+                {(llmProposal.unknowns ?? []).slice(0, 4).map((u) => (
+                  <li key={u}>{u}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
       <div data-testid="pulse-evidence-feedback" className="space-y-1 border-t border-gray-100 pt-2">
         <h4 className="text-[10px] uppercase tracking-wide text-gray-400">Feedback</h4>
         <p className="text-[10px] text-gray-500">
@@ -811,6 +888,11 @@ function InvestigationView({ incidentId, graphNodeByServiceId, stackName, nodeId
     feedbackStatus,
     create: createInvestigation,
     submitFeedback,
+    llmStatus,
+    llmProposal,
+    llmLoading,
+    llmError,
+    generateLLMProposal,
   } = usePulseInvestigation(incidentId)
   const [assessment, setAssessment] = useState('useful')
   const [feedbackRationale, setFeedbackRationale] = useState('')
@@ -890,6 +972,11 @@ function InvestigationView({ incidentId, graphNodeByServiceId, stackName, nodeId
                   rationale: feedbackRationale,
                 })
               }
+              llmStatus={llmStatus}
+              llmProposal={llmProposal}
+              llmLoading={llmLoading}
+              llmError={llmError}
+              onGenerateLLM={() => void generateLLMProposal()}
             />
           )}
 

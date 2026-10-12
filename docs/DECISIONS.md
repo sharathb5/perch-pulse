@@ -28,6 +28,52 @@ Rules:
 
 ---
 
+## ADR-025: Constrained optional LLM investigator (Milestone F2a)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F1 ships a deterministic investigation baseline. Teams want an optional
+model-backed proposer that can rank/rewrite hypotheses without becoming an
+authoritative source of facts, mutating F1 snapshots, or requiring paid provider
+calls in CI.
+
+**Decision:**
+1. Add `internal/pulse/investigation/llm` with schema
+   `pulse.investigation.proposal.v1`, persisted separately under
+   `investigation-proposals/`. F1 snapshots remain immutable and unchanged.
+2. Provider adapter speaks OpenAI-compatible `POST {base}/chat/completions`
+   (system+user messages, `max_tokens`, `temperature`, optional
+   `response_format=json_object`). Config is server-side opt-in via
+   `PERCH_PULSE_LLM_*` env vars; disabled by default; HTTPS required except
+   loopback HTTP for local fakes. Client-supplied provider URLs are rejected.
+3. Evidence payload is a bounded redacted subset of the F1 snapshot with
+   allowlisted citation/service IDs. Untrusted evidence text is wrapped and
+   neutralized; validation rejects fabricated citations, confirmed-root-cause /
+   causal-attribution language, confidence percentages, and fingerprint
+   mismatches. Syntactically valid citations that do not plausibly support claim
+   wording are marked unverified/rejected. `validated` means mechanical citation
+   resolution + lexical policy — not semantic entailment. Per-request token/
+   size/timeout/concurrency bounds apply; no aggregate spend budget.
+4. Explicit POST `/api/pulse/investigations/{id}/llm-propose` (loopback/Origin
+   guards) and CLI `perch pulse llm-propose`. No provider calls on GET or on
+   incident open. Concurrency semaphore + timeouts bound execution. Proposal
+   feedback is a separate schema from F1 feedback.
+5. UI adds an optional Generate AI Investigation control beside the deterministic
+   report with unavailable/loading/failure/success states; never labels proposals
+   as confirmed diagnoses.
+
+**Consequences:** Deterministic Perch/Pulse works without credentials. Eval
+harnesses (F2b) can compare LLM proposals to the F1 baseline. Live provider
+compatibility beyond the documented chat/completions fields is not claimed —
+CI uses deterministic fakes only.
+
+**Alternatives considered:** Replacing F1 hypotheses in-place (rejected: evidence
+integrity); browser-held API keys (rejected: secret hygiene); autonomous agent
+loops / auto Run Pulse (rejected: side effects); embedding LangChain/official
+SDK (rejected: dependency surface for a thin HTTP adapter).
+
 ## ADR-023: Evidence-backed investigation without LLM (Milestone F1)
 
 **Date:** 2026-10-12  

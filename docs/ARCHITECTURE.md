@@ -168,7 +168,7 @@ Solid edges mark implemented package relationships that already exist in-tree
 
 | Module | Intent | Databricks |
 |--------|--------|------------|
-| Evidence / investigation | `internal/pulse/investigation` assembles citations from incidents + correlate + topology (F1 deterministic) | Not required for assembly |
+| Evidence / investigation | `internal/pulse/investigation` assembles citations from incidents + correlate + topology (F1 deterministic); optional `investigation/llm` proposals (F2a) | Not required for assembly |
 | Baselines / analytics | Compare current signals to stored history | Optional amplify |
 | File retention backend | Durable local persistence implementing `store.Store` | Not required |
 | Deploy impact | Correlate deploys with health/log shifts | Optional for large joins |

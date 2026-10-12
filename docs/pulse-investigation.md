@@ -1,10 +1,12 @@
-# Pulse Investigation (Milestone F1)
+# Pulse Investigation (Milestone F1 + F2a)
 
-Evidence-backed investigation snapshots for Pulse incidents. **No LLM required.**
+Evidence-backed investigation snapshots for Pulse incidents. **No LLM required for F1.**
 Investigations assemble bounded facts, explicit hypotheses, unknowns, and verification
 steps. They do **not** confirm root causes or perform remediation.
 
-See [ADR-023](DECISIONS.md).
+Optional Milestone F2a adds a constrained LLM proposer that emits a **separate**
+validated proposal (`pulse.investigation.proposal.v1`) without mutating F1 snapshots.
+See [ADR-023](DECISIONS.md) and [ADR-025](DECISIONS.md).
 
 ## Concepts
 
@@ -109,15 +111,62 @@ fingerprint + `reuse_identical` returns the existing row.
 
 Feedback cannot modify incidents, recovery, hypotheses, or detector thresholds.
 
-## Future LLM seam
+## Optional LLM investigator (F2a)
 
 ```text
-EvidenceSnapshot → Proposer.Propose → Proposal
+F1 Investigation (immutable)
+  → bounded EvidencePayload
+  → OpenAI-compatible chat/completions (opt-in)
+  → validate citations / fingerprint / language policy
+  → pulse.investigation.proposal.v1 (separate persistence)
 ```
 
-F1 ships only `DeterministicProposer`. No OpenAI/Anthropic/LangChain. Future
-eval can compare LLM proposals against this baseline + human feedback, optionally
-storing artifacts in Databricks/MLflow without making them required.
+Disabled by default. Server-side env only:
+
+| Variable | Purpose |
+|----------|---------|
+| `PERCH_PULSE_LLM_ENABLED` | Opt-in (`1`/`true`) |
+| `PERCH_PULSE_LLM_API_KEY` | Bearer token (never logged or returned by status) |
+| `PERCH_PULSE_LLM_BASE_URL` | Provider base ending before `/chat/completions` (HTTPS; loopback HTTP allowed for fakes) |
+| `PERCH_PULSE_LLM_MODEL` | Model id (default `gpt-4o-mini`) |
+| `PERCH_PULSE_LLM_TIMEOUT_SEC` | 1–120 (default 20) |
+| `PERCH_PULSE_LLM_MAX_TOKENS` | 64–4096 (default 1200) |
+| `PERCH_PULSE_LLM_MAX_CONCURRENT` | 1–4 (default 1) |
+
+Provider contract used: OpenAI-style `POST {base}/chat/completions` with
+`model`, `messages[{role,content}]`, `max_tokens`, `temperature`, optional
+`response_format:{type:json_object}`. Response fields used: `choices[0].message.content`,
+`finish_reason`, `usage.prompt_tokens`, `usage.completion_tokens`, `id`, `model`.
+
+**Not tested against a live paid provider in CI.** Compatibility beyond this
+documented subset is unverified.
+
+**Usage bounds:** each request is bounded (`max_tokens`, payload/response size,
+timeout, concurrency). There is **no aggregate spend/token budget** across
+repeated POSTs — local loopback callers can invoke propose repeatedly. Operators
+who need spend caps should gate credentials or terminate the viz process.
+
+**Validation honesty:** `support_status=validated` means citation IDs resolve and
+pass lexical policy checks. It does **not** prove the cited evidence entails the
+claim wording. Causal attribution phrases are rejected; correlation remains
+correlation.
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/api/pulse/llm/status` | Secret-free availability |
+| POST | `/api/pulse/investigations/{id}/llm-propose` | Loopback only; no GET side effects |
+| GET | `/api/pulse/investigations/{id}/proposals` | List persisted proposals |
+| GET | `/api/pulse/proposals/{id}` | Load proposal |
+| POST | `/api/pulse/proposals/{id}/feedback` | Proposal-only feedback (not F1 feedback) |
+
+```bash
+perch pulse llm-status
+perch pulse llm-propose 'inv|…' --expected-fingerprint '…'
+```
+
+F1 still ships `DeterministicProposer`. Future eval (F2b) can compare LLM proposals
+against this baseline + human feedback, optionally storing artifacts in
+Databricks/MLflow without making them required.
 
 ## Evaluation
 
