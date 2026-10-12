@@ -1,6 +1,7 @@
 import { ReactFlowProvider } from '@xyflow/react'
 import { X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { liveEnvAllowsGraphJoin } from '../lib/livePulse.js'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DetailPanel } from '../components/DetailPanel.jsx'
 import { Navbar } from '../components/Navbar.jsx'
@@ -40,10 +41,14 @@ export function StackView() {
   const { nodes: flowNodes, edges: flowEdges, appName, error, refetch: refetchGraph } = usePerchData(environment)
   const {
     getForNode,
+    getLiveForNode,
     graphNodeByServiceId,
     overview,
     incidents,
     changes,
+    liveStatus,
+    liveServicesResponse,
+    unmappedLive,
     limitations,
     dataSources: pulseDataSources,
     error: pulseError,
@@ -90,11 +95,41 @@ export function StackView() {
 
     return flowNodes.map((n) => {
       const pulse = !graphDemo ? getForNode(n.id) : null
+      // Join Live Pulse by exact graph_node only. Block when triad envs disagree.
+      let liveService = !graphDemo ? getLiveForNode(n.id) : null
+      if (
+        liveService &&
+        !liveEnvAllowsGraphJoin(
+          liveStatus?.environment || liveService.environment,
+          environment,
+        )
+      ) {
+        liveService = null
+      }
       const enriched = pulse
-        ? enrichServicePulse(pulse, pulse.relatedIncidents ?? [], {
+        ? enrichServicePulse(pulse, pulse.relatedIncidents ?? incidents, {
             expectedEnvironment: environment,
+            liveService: liveService ?? pulse.liveService ?? null,
           })
-        : null
+        : liveService
+          ? enrichServicePulse(
+              {
+                serviceId: liveService.serviceId,
+                graphNode: liveService.graphNode,
+                mappingSource: liveService.mappingSource,
+                intelligence: liveService.intelligence,
+                intelligenceAvailable: true,
+                freshness: liveService.freshness,
+                lastObservedAt: liveService.lastObservedAt,
+                openIncidentIds: liveService.openIncidentIds,
+                relatedIncidentIds: [],
+                limitations: liveService.limitations,
+                activeHealthNote: liveService.activeHealthNote,
+              },
+              incidents,
+              { expectedEnvironment: environment, liveService },
+            )
+          : null
       let runPulse = null
       if (participated.has(n.id)) {
         runPulse = { participation: errored.has(n.id) ? 'error' : 'observed' }
@@ -113,7 +148,18 @@ export function StackView() {
         },
       }
     })
-  }, [flowNodes, getForNode, environment, graphDemo, runHighlight, highlightsCleared, runId])
+  }, [
+    flowNodes,
+    getForNode,
+    getLiveForNode,
+    liveStatus,
+    incidents,
+    environment,
+    graphDemo,
+    runHighlight,
+    highlightsCleared,
+    runId,
+  ])
 
   const node = useMemo(() => {
     const fromFlow = nodesWithPulse.find((n) => n.id === nodeId)?.data
@@ -124,14 +170,24 @@ export function StackView() {
   }, [nodesWithPulse, nodeId])
 
   const selectedPulse = !graphDemo && nodeId ? getForNode(nodeId) : null
+  const selectedLiveRaw = !graphDemo && nodeId ? getLiveForNode(nodeId) : null
+  const selectedLive =
+    selectedLiveRaw &&
+    liveEnvAllowsGraphJoin(
+      liveStatus?.environment || selectedLiveRaw.environment,
+      environment,
+    )
+      ? selectedLiveRaw
+      : null
   const selectedPulseEnriched = useMemo(() => {
     if (!selectedPulse) {
       return null
     }
-    return enrichServicePulse(selectedPulse, selectedPulse.relatedIncidents ?? [], {
+    return enrichServicePulse(selectedPulse, selectedPulse.relatedIncidents ?? incidents, {
       expectedEnvironment: environment,
+      liveService: selectedLive ?? null,
     })
-  }, [selectedPulse, environment])
+  }, [selectedPulse, selectedLive, incidents, environment])
 
   const refetch = useCallback(() => {
     void refetchGraph()
@@ -276,6 +332,10 @@ export function StackView() {
           overview={overview}
           incidents={incidents}
           changes={changes}
+          liveStatus={liveStatus}
+          liveServices={liveServicesResponse?.services ?? []}
+          unmappedLive={unmappedLive}
+          selectedLive={selectedLive}
           limitations={limitations}
           loading={pulseLoading}
           error={pulseError}

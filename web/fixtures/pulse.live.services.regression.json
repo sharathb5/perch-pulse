@@ -1,0 +1,91 @@
+{
+  "count": 1,
+  "generated_at": "2026-10-11T22:04:15Z",
+  "limitations": [
+    "Live service signals come from the server-side collector snapshot.",
+    "GET does not query Prometheus; missing values are not zero errors.",
+    "Active health probes remain on GET /api/status."
+  ],
+  "schema_version": "pulse.api.live_services.v1",
+  "services": [
+    {
+      "active_health_note": "Active reachability/latency probes remain on GET /api/status and are not represented here.",
+      "baseline_ready": true,
+      "environment": "local",
+      "freshness": "fresh",
+      "graph_node": "payment",
+      "intelligence": "degraded",
+      "last_observed_at": "2026-10-11T22:04:15Z",
+      "mapping_source": "astronomy_compose",
+      "open_incident_ids": [
+        "inc|astronomy/local/payment|20261011T220315.000000000Z"
+      ],
+      "quality": "fresh",
+      "regression_open": true,
+      "service_id": "astronomy/local/payment",
+      "signals": [
+        {
+          "baseline_ready": true,
+          "baseline_value": 80,
+          "observed_at": "2026-10-11T22:04:15Z",
+          "quality": "fresh",
+          "regression_open": true,
+          "regression_score": 61.5,
+          "signal": "latency_ms",
+          "unit": "ms",
+          "value": 5000,
+          "window": "2m0s"
+        },
+        {
+          "baseline_ready": true,
+          "observed_at": "2026-10-11T22:04:15Z",
+          "quality": "fresh",
+          "regression_open": false,
+          "signal": "error_rate",
+          "unit": "ratio",
+          "value": 0.01,
+          "window": "2m0s"
+        },
+        {
+          "baseline_ready": true,
+          "observed_at": "2026-10-11T22:04:15Z",
+          "quality": "fresh",
+          "regression_open": false,
+          "signal": "call_rate",
+          "unit": "calls_per_sec",
+          "value": 1,
+          "window": "2m0s"
+        }
+      ]
+    }
+  ],
+  "status": {
+    "active_health_note": "Active reachability/latency probes remain on GET /api/status and are not represented here.",
+    "active_incidents": 1,
+    "active_regressions": 1,
+    "available": true,
+    "configured": true,
+    "detector_version": "baseline-rel-mad-v1",
+    "enabled": true,
+    "environment": "local",
+    "freshness_window": "2m0s",
+    "generated_at": "2026-10-11T22:04:15Z",
+    "last_attempt_at": "2026-10-11T22:04:15Z",
+    "last_success_at": "2026-10-11T22:04:15Z",
+    "limitations": [
+      "Live snapshot is polled server-side; GET handlers do not query Prometheus.",
+      "Missing series are omitted — never treated as zero errors or healthy.",
+      "Stale telemetry is not healthy; missing telemetry is not recovery.",
+      "Detector findings are not proof of root cause."
+    ],
+    "poll_interval": "5m0s",
+    "prometheus_configured": true,
+    "run_pulse_note": "Run Pulse remains independent on /api/pulse/workflows and /api/pulse/runs.",
+    "sample_window": "2m0s",
+    "schema_version": "pulse.api.live_status.v1",
+    "services_observed": 1,
+    "services_with_baseline": 1,
+    "state": "collecting",
+    "unavailable_or_unknown": 0
+  }
+}

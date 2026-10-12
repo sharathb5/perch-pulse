@@ -55,7 +55,7 @@ test.describe('Pulse sidebar (Milestone C)', () => {
     await page.getByTestId('pulse-incident-browser').locator('button').first().click()
     await expect(page).toHaveURL(/incident=/)
     await expect(page.getByTestId('pulse-investigation')).toBeVisible()
-    await expect(page.getByTestId('pulse-investigation-state')).toContainText('Recovered')
+    await expect(page.getByTestId('pulse-investigation-state')).toContainText('RECOVERED')
     await expect(page.getByTestId('pulse-investigation-historical')).toContainText('not a current outage')
     await expect(page.getByTestId('pulse-digest-latency_ms-during')).toContainText('820')
     await expect(page.getByTestId('pulse-digest-error_rate-after')).toContainText('N/A')

@@ -54,6 +54,7 @@ Fixtures live in `web/fixtures/`:
 | `status.stale-unknown.json` | Nodes without matching health → `unknown` |
 | `pulse.services.*.json` / `pulse.incidents.*.json` / `pulse.changes*.json` | Pulse overlays + sidebar (Milestones B/C) |
 | `pulse.workflows.*.json` / `pulse.run.*.json` | Run Pulse catalog + diagnostic runs (Milestone E; fixtures labeled, not live) |
+| `pulse.live.*.json` | Live Pulse status/services/incidents (Go-generated; regenerate with `UPDATE_LIVE_FIXTURES=1`) |
 
 E2E tests intercept `/api/graph`, `/api/status`, and `/api/pulse/*` (and optionally fail them). Default Pulse mock is empty so legacy screenshot baselines stay stable. They never call Astronomy Shop, Databricks, or production credentials.
 
@@ -79,6 +80,7 @@ E2E tests intercept `/api/graph`, `/api/status`, and `/api/pulse/*` (and optiona
 | `pulse-sidebar-unavailable` | 1280×720 | Sidebar with unavailable observations |
 | `pulse-sidebar-narrow` | 900×800 | Sidebar + detail at narrow desktop |
 | `pulse-run-unavailable` | 1280×720 | Run Pulse tab when demo not configured |
+| `pulse-live-regression` | 1280×720 | Live telemetry overview + live_regression graph badge |
 | `pulse-run-completed` | 1280×720 | Completed diagnostic (highlights cleared in shot) |
 
 ### Regenerating baselines

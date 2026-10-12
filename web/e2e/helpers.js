@@ -30,6 +30,11 @@ export const fixtures = {
   pulseRunCompletedGraph: loadFixture('pulse.run.completed.graph.json'),
   pulseRunRunning: loadFixture('pulse.run.running.json'),
   pulseRunFailed: loadFixture('pulse.run.failed.json'),
+  pulseLiveStatusDisabled: loadFixture('pulse.live.status.disabled.json'),
+  pulseLiveStatusCollecting: loadFixture('pulse.live.status.collecting.json'),
+  pulseLiveStatusWarming: loadFixture('pulse.live.status.warming.json'),
+  pulseLiveServicesRegression: loadFixture('pulse.live.services.regression.json'),
+  pulseLiveIncidentsActive: loadFixture('pulse.live.incidents.active.json'),
 }
 
 /**
@@ -49,6 +54,9 @@ export const fixtures = {
  *   pulseRunCreate?: object,
  *   pulseWorkflowsStatus?: number,
  *   pulseRunsStatus?: number,
+ *   pulseLiveStatus?: object,
+ *   pulseLiveServices?: object,
+ *   pulseLiveIncidents?: object,
  * }} opts
  */
 export async function mockApis(page, opts = {}) {
@@ -78,6 +86,28 @@ export async function mockApis(page, opts = {}) {
   const pulseRunCreate = opts.pulseRunCreate ?? fixtures.pulseRunCreate
   const pulseWorkflowsStatus = opts.pulseWorkflowsStatus ?? 200
   const pulseRunsStatus = opts.pulseRunsStatus ?? 200
+  // Default disabled Live Pulse keeps prior screenshot baselines stable.
+  const pulseLiveStatus = opts.pulseLiveStatus ?? fixtures.pulseLiveStatusDisabled
+  const pulseLiveServices =
+    opts.pulseLiveServices ??
+    ({
+      schema_version: 'pulse.api.live_services.v1',
+      generated_at: pulseLiveStatus.generated_at,
+      count: 0,
+      services: [],
+      status: pulseLiveStatus.status,
+      limitations: [],
+    })
+  const pulseLiveIncidents =
+    opts.pulseLiveIncidents ??
+    ({
+      schema_version: 'pulse.api.live_incidents.v1',
+      generated_at: pulseLiveStatus.generated_at,
+      count: 0,
+      incidents: [],
+      status: pulseLiveStatus.status,
+      limitations: [],
+    })
 
   await page.route('**/api/graph**', async (route) => {
     if (graphStatus >= 400) {
@@ -108,6 +138,28 @@ export async function mockApis(page, opts = {}) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(status),
+    })
+  })
+
+  await page.route('**/api/pulse/live/status**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(pulseLiveStatus),
+    })
+  })
+  await page.route('**/api/pulse/live/services**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(pulseLiveServices),
+    })
+  })
+  await page.route('**/api/pulse/live/incidents**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(pulseLiveIncidents),
     })
   })
 

@@ -1,7 +1,13 @@
 import { Handle, Position } from '@xyflow/react'
 import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { decodeIncidentId, decodeRunId, normalizePulseTab, pulseStackPath } from '../lib/pulse.js'
+import {
+  PULSE_KIND,
+  decodeIncidentId,
+  decodeRunId,
+  normalizePulseTab,
+  pulseStackPath,
+} from '../lib/pulse.js'
 import { useRunPulseHighlight } from '../lib/useRunPulseHighlight.js'
 import { buildErrorPrompt, isErroredNode, openInAIWithFallback } from '../lib/aiHandoff.js'
 import { ProviderBadge } from './ProviderBadge.jsx'
@@ -71,10 +77,26 @@ export function ServiceCard({ data, selected }) {
     setOpenInMenuOpen(false)
   }
 
+  const livePulseKind =
+    data.pulse?.kind === PULSE_KIND.LIVE_REGRESSION
+      ? 'regression'
+      : data.pulse?.kind === PULSE_KIND.STALE && data.pulse?.liveService
+        ? 'stale'
+        : undefined
+
   return (
     <div
       data-testid={`service-node-${id}`}
       data-run-pulse={runPulseKind || undefined}
+      data-live-pulse={livePulseKind}
+      aria-label={[
+        data.label,
+        data.pulse?.label,
+        runPulseKind ? `Run Pulse ${runPulseKind}` : '',
+        livePulseKind ? `Live Pulse ${livePulseKind}` : '',
+      ]
+        .filter(Boolean)
+        .join(', ')}
       className="relative w-[210px] max-w-[210px]"
     >
       <Handle type="target" position={Position.Left} className="h-2 w-2 border-0 bg-transparent opacity-0" />

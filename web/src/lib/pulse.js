@@ -39,6 +39,8 @@ export const INCIDENT_STATE = Object.freeze({
 /** Presentation kinds for node indicators / detail copy (not probe health). */
 export const PULSE_KIND = Object.freeze({
   NONE: 'none',
+  /** Current telemetry-backed regression from Live Pulse (distinct from persisted open). */
+  LIVE_REGRESSION: 'live_regression',
   OPEN: 'open',
   HISTORICAL: 'historical',
   STALE: 'stale',
@@ -1297,7 +1299,24 @@ export function signalUnitLabel(signal) {
  */
 export function incidentStateLabel(incident) {
   if (!incident) return ''
-  return incident.open ? 'Unresolved (persisted)' : 'Recovered (historical)'
+  const lifecycle = String(incident.lifecycle ?? '').toLowerCase()
+  if (lifecycle === 'telemetry_unavailable') {
+    return 'TELEMETRY UNAVAILABLE'
+  }
+  if (lifecycle === 'active' && incident.liveSource === 'live') {
+    return 'ACTIVE'
+  }
+  if (lifecycle === 'unresolved' || (lifecycle === 'active' && incident.liveSource !== 'live')) {
+    // Persisted open file ≠ current live activity.
+    return 'HISTORICAL'
+  }
+  if (lifecycle === 'recovered') {
+    return 'RECOVERED'
+  }
+  if (lifecycle === 'historical') {
+    return 'HISTORICAL'
+  }
+  return incident.open ? 'HISTORICAL' : 'RECOVERED'
 }
 
 /**
@@ -1395,7 +1414,7 @@ function intelligenceRank(intel) {
  * Attach related incidents (from list endpoint) onto a service row for the panel.
  * @param {object | null | undefined} serviceRow
  * @param {object[]} incidents — normalized incidents
- * @param {{ expectedEnvironment?: string }} [opts]
+ * @param {{ expectedEnvironment?: string, liveService?: object | null }} [opts]
  */
 export function enrichServicePulse(serviceRow, incidents, opts = {}) {
   if (!serviceRow) {
@@ -1424,7 +1443,8 @@ export function enrichServicePulse(serviceRow, incidents, opts = {}) {
       return ie !== '' && ie !== env
     })
 
-  const kind = derivePulseKind(serviceRow, related)
+  const liveService = opts.liveService ?? null
+  const kind = derivePulseKind(serviceRow, related, liveService)
   const open = related.filter((i) => i.open)
   const recovered = related.filter((i) => !i.open)
   const latest = related[0] ?? null
@@ -1432,6 +1452,7 @@ export function enrichServicePulse(serviceRow, incidents, opts = {}) {
   return {
     ...serviceRow,
     kind,
+    liveService,
     relatedIncidents: related,
     openIncidents: open,
     recoveredIncidents: recovered,
@@ -1443,15 +1464,37 @@ export function enrichServicePulse(serviceRow, incidents, opts = {}) {
     signalTypes: uniqueStrings(related.flatMap((i) => i.signalTypes ?? [])),
     envMismatch,
     label: pulseKindLabel(kind),
-    hint: pulseKindHint(kind, serviceRow),
+    hint: pulseKindHint(kind, serviceRow, liveService),
   }
 }
 
 /**
+ * Precedence (Pulse badge only — never overwrites StatusPill / Run Pulse attrs):
+ * live_regression > open (historical unresolved) > stale > historical > unavailable > unknown
+ *
  * @param {object} serviceRow
  * @param {object[]} relatedIncidents
+ * @param {object | null} [liveService]
  */
-export function derivePulseKind(serviceRow, relatedIncidents = []) {
+export function derivePulseKind(serviceRow, relatedIncidents = [], liveService = null) {
+  // Live regression from fresh telemetry — before persisted open badges.
+  if (
+    liveService &&
+    liveService.regressionOpen &&
+    liveService.baselineReady &&
+    liveService.quality !== 'stale' &&
+    liveService.freshness !== 'stale' &&
+    liveService.quality !== 'missing'
+  ) {
+    return PULSE_KIND.LIVE_REGRESSION
+  }
+  if (liveService && (liveService.quality === 'stale' || liveService.freshness === 'stale')) {
+    // Stale live last-known is never painted as current healthy or live regression.
+    if (liveService.regressionOpen || serviceRow.freshness === 'stale') {
+      return PULSE_KIND.STALE
+    }
+  }
+
   const openIds = serviceRow.openIncidentIds ?? []
   const related = relatedIncidents.length
     ? relatedIncidents
@@ -1506,6 +1549,8 @@ export function derivePulseKind(serviceRow, relatedIncidents = []) {
  */
 export function pulseKindLabel(kind) {
   switch (kind) {
+    case PULSE_KIND.LIVE_REGRESSION:
+      return 'Pulse: live regression'
     case PULSE_KIND.OPEN:
       return 'Pulse: open'
     case PULSE_KIND.HISTORICAL:
@@ -1525,13 +1570,18 @@ export function pulseKindLabel(kind) {
  * @param {string} kind
  * @param {object} serviceRow
  */
-export function pulseKindHint(kind, serviceRow) {
+export function pulseKindHint(kind, serviceRow, liveService = null) {
   switch (kind) {
+    case PULSE_KIND.LIVE_REGRESSION:
+      return 'Current Live Pulse regression from telemetry — not active probe health or Run Pulse.'
     case PULSE_KIND.OPEN:
       return 'Open Pulse incident(s) — not the same as active probe health.'
     case PULSE_KIND.HISTORICAL:
       return 'Recovered historical Pulse incidents — not a current outage.'
     case PULSE_KIND.STALE:
+      if (liveService?.quality === 'stale') {
+        return 'Live telemetry is stale (last-known only); stale ≠ healthy.'
+      }
       return 'Pulse evidence is stale; stale ≠ healthy.'
     case PULSE_KIND.UNAVAILABLE:
       if (String(serviceRow?.observationSource ?? '').includes('process_memory') ||
@@ -1553,6 +1603,9 @@ export function pulseKindHint(kind, serviceRow) {
  */
 export function pulseKindStyles(kind) {
   switch (kind) {
+    case PULSE_KIND.LIVE_REGRESSION:
+      // Distinct from StatusPill danger red and Run Pulse amber participation.
+      return { dot: 'bg-orange-500', text: 'text-orange-800', short: 'live' }
     case PULSE_KIND.OPEN:
       return { dot: 'bg-amber-400', text: 'text-amber-700', short: 'open' }
     case PULSE_KIND.HISTORICAL:
