@@ -1,8 +1,8 @@
-# Pulse HTTP API (Milestone A + E)
+# Pulse HTTP API (Milestone A + E + Live)
 
-Localhost JSON for the Perch React UI. Mounted on the existing `perch viz` server (127.0.0.1). See [ADR-014](DECISIONS.md) and [ADR-020](DECISIONS.md).
+Localhost JSON for the Perch React UI. Mounted on the existing `perch viz` server (127.0.0.1). See [ADR-014](DECISIONS.md), [ADR-020](DECISIONS.md), and [ADR-022](DECISIONS.md).
 
-Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted POST for on-demand diagnostics — see [`pulse-run.md`](pulse-run.md).
+Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted POST for on-demand diagnostics — see [`pulse-run.md`](pulse-run.md). Live Pulse adds opt-in continuous snapshot routes — see [`pulse-live.md`](pulse-live.md).
 
 ## Routes
 
@@ -16,6 +16,9 @@ Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted PO
 | GET | `/api/pulse/workflows` | Run Pulse allowlisted workflow catalog |
 | POST | `/api/pulse/runs` | Start one Run Pulse diagnostic (loopback only) |
 | GET | `/api/pulse/runs/{id}` | Poll Run Pulse run status / bounded evidence |
+| GET | `/api/pulse/live/status` | Live Pulse runtime status (opt-in collector) |
+| GET | `/api/pulse/live/services` | Live per-service telemetry snapshot |
+| GET | `/api/pulse/live/incidents` | Live/active vs recovered incident labels |
 
 `{id...}` is required because Pulse IDs embed `/` (e.g. `inc|astronomy/local/shipping|…`).
 
@@ -27,10 +30,11 @@ Existing Perch routes are unchanged: `/api/graph`, `/api/status`, `/api/logs`, `
 |------|---------|-------|
 | Incidents | `incident.FileStore` under `$PERCH_PULSE_DIR` or `<cwd>/.perch/pulse` | Persisted JSON snapshots |
 | Changes | `change.FileStore` (same root) | Persisted JSON snapshots |
-| Observations | Optional process-local `store.Store` | **Not** wired in the viz process today → `process_memory_unavailable` |
+| Observations | Optional process-local `store.Store` | Wired when Live Pulse is enabled; otherwise `process_memory_unavailable` |
 | Correlation | `correlate.Correlate` at request time | Embedded in incident detail; **not causation** |
+| Live snapshot | `internal/pulse/live` collector | Opt-in; `/api/pulse/live/*` only |
 
-This API does **not** claim continuous live updates. Empty Pulse dirs return empty lists / unavailable intelligence — never mock incidents.
+Historical routes remain snapshot reads of persisted artifacts. Continuous updates require Live Pulse (`PERCH_LIVE_PULSE_ENABLED`). Empty Pulse dirs return empty lists / unavailable intelligence — never mock incidents.
 
 ## Active health vs Pulse intelligence
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -36,7 +37,9 @@ func TestVizRegression_GraphAndStatusWithoutPulse(t *testing.T) {
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		serveStatusJSON(w, r, "dev")
 	})
-	_ = registerPulseAPI(mux, "dev")
+	if rt, err := registerPulseAPI(mux, "dev", context.Background()); err == nil {
+		t.Cleanup(rt.Stop)
+	}
 
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/graph?env=dev", nil))
@@ -93,9 +96,11 @@ func TestVizRegression_CorruptPulseArtifactsDoNotCrashCore(t *testing.T) {
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		serveStatusJSON(w, r, "dev")
 	})
-	if err := registerPulseAPI(mux, "dev"); err != nil {
+	rt, err := registerPulseAPI(mux, "dev", context.Background())
+	if err != nil {
 		t.Fatalf("pulse mount: %v", err)
 	}
+	t.Cleanup(rt.Stop)
 
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/graph?env=dev", nil))

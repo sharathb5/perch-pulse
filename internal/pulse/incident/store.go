@@ -11,6 +11,9 @@ import (
 // Store is the local incident API.
 type Store interface {
 	Append(inc Incident) error
+	// Upsert replaces any prior payload with the same IncidentID.
+	// Used by live Pulse lifecycle updates (evidence refresh, recovery).
+	Upsert(inc Incident) error
 	Get(incidentID string) (Incident, bool, error)
 	List() ([]Incident, error)
 }
@@ -41,6 +44,18 @@ func (m *Memory) Append(inc Incident) error {
 		}
 		return fmt.Errorf("incident: duplicate incident_id %q with conflicting payload", stored.IncidentID)
 	}
+	m.byID[stored.IncidentID] = stored
+	return nil
+}
+
+// Upsert validates and stores inc, replacing any prior payload for the same ID.
+func (m *Memory) Upsert(inc Incident) error {
+	if err := inc.Validate(); err != nil {
+		return err
+	}
+	stored := cloneIncident(inc)
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.byID[stored.IncidentID] = stored
 	return nil
 }

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -68,9 +69,11 @@ func TestVizMux_PulseAndExistingRoutes(t *testing.T) {
 		}
 		serveGraphJSON(w, r, "dev")
 	})
-	if err := registerPulseAPI(mux, "local"); err != nil {
+	rt, err := registerPulseAPI(mux, "local", context.Background())
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(rt.Stop)
 
 	// Existing Perch graph route still works.
 	rr := httptest.NewRecorder()

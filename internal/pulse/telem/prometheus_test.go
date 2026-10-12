@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -70,6 +71,91 @@ func TestPrometheusCollectMapsServices(t *testing.T) {
 	}
 	if seen[detect.SignalCallRate] != 0.5 {
 		t.Fatalf("call_rate %v", seen)
+	}
+}
+
+func TestPrometheusRejectsOversizedResponse(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/query", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// Just over 4 MiB.
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"vector","result":[`))
+		pad := make([]byte, 4<<20)
+		for i := range pad {
+			pad[i] = 'x'
+		}
+		_, _ = w.Write(pad)
+		_, _ = w.Write([]byte(`]}}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	p := NewPrometheus(srv.URL)
+	p.Services = []string{"payment"}
+	_, err := p.Collect(context.Background(), time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC))
+	if err == nil {
+		t.Fatal("expected oversized response error")
+	}
+}
+
+func TestPrometheusRejectsCardinalityExplosion(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/query", func(w http.ResponseWriter, r *http.Request) {
+		results := make([]map[string]any, 0, 100)
+		for i := 0; i < 100; i++ {
+			results = append(results, map[string]any{
+				"metric": map[string]string{"service_name": "svc-" + string(rune('a'+(i%26))) + "-" + strconv.Itoa(i)},
+				"value":  []any{1.0, "1"},
+			})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "success",
+			"data":   map[string]any{"resultType": "vector", "result": results},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	p := NewPrometheus(srv.URL)
+	p.MaxSeries = 10
+	p.Services = []string{"payment"}
+	_, err := p.Collect(context.Background(), time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC))
+	if err == nil || !strings.Contains(err.Error(), "cardinality") {
+		t.Fatalf("expected cardinality error, got %v", err)
+	}
+}
+
+func TestPrometheusSkipsNaNInf(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/query", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("query")
+		var results []map[string]any
+		if strings.Contains(q, "histogram_quantile") {
+			results = []map[string]any{{
+				"metric": map[string]string{"service_name": "payment"},
+				"value":  []any{1.0, "NaN"},
+			}}
+		} else if strings.Contains(q, `status_code="STATUS_CODE_ERROR"`) {
+			results = nil
+		} else {
+			results = []map[string]any{{
+				"metric": map[string]string{"service_name": "payment"},
+				"value":  []any{1.0, "+Inf"},
+			}}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "success",
+			"data":   map[string]any{"resultType": "vector", "result": results},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	p := NewPrometheus(srv.URL)
+	p.Services = []string{"payment"}
+	samples, err := p.Collect(context.Background(), time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(samples) != 0 {
+		t.Fatalf("NaN/Inf must be omitted, got %+v", samples)
 	}
 }
 

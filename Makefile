@@ -55,7 +55,7 @@ perch-regression:
 
 # Deterministic Pulse samples→detector→incident→API integration (no Docker).
 pulse-integration:
-	go test ./internal/pulse/pipeline/... ./internal/pulse/pipeline/test/... -count=1
+	go test ./internal/pulse/pipeline/... ./internal/pulse/pipeline/test/... ./internal/pulse/live/test/... ./internal/pulse/telem/... -count=1
 
 provider-validate:
 	go test ./internal/providerspec/... -count=1

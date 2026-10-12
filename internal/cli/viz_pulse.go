@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -8,17 +9,31 @@ import (
 	"strings"
 
 	pulseapi "github.com/yashg4509/perch/internal/pulse/api"
+	"github.com/yashg4509/perch/internal/pulse/live"
 	"github.com/yashg4509/perch/internal/pulse/runpulse"
 )
 
+// pulseRuntime holds optional long-lived Pulse subsystems for viz shutdown.
+type pulseRuntime struct {
+	live *live.Runtime
+}
+
+func (p *pulseRuntime) Stop() {
+	if p == nil || p.live == nil {
+		return
+	}
+	p.live.Stop()
+}
+
 // registerPulseAPI mounts Pulse endpoints on the viz mux (historical read APIs +
-// optional Run Pulse diagnostics). Failures to resolve astronomy mapping fall
-// back to an empty mapper so core Perch viz still starts without Astronomy Shop.
-// env is the selected perch.yaml environment (same as --env / graph queries).
-func registerPulseAPI(mux *http.ServeMux, env string) error {
+// optional Run Pulse diagnostics + optional Live Pulse collector). Failures to
+// resolve astronomy mapping fall back to an empty mapper so core Perch viz still
+// starts without Astronomy Shop. env is the selected perch.yaml environment.
+// ctx cancels the Live Pulse collector when the viz server stops.
+func registerPulseAPI(mux *http.ServeMux, env string, ctx context.Context) (*pulseRuntime, error) {
 	dir, err := vizPulseDataDir()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var mapper pulseapi.ServiceMapper = pulseapi.EmptyMapper{}
 	if am, err := pulseapi.NewAstronomyMapper(env); err == nil {
@@ -26,9 +41,10 @@ func registerPulseAPI(mux *http.ServeMux, env string) error {
 	}
 	reader, err := pulseapi.NewFileReader(dir, mapper)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	h := &pulseapi.Handler{Reader: reader}
+	rt := &pulseRuntime{}
 
 	// Run Pulse: explicit env config; invalid allowlist → engine omitted (workflows 503 / unavailable).
 	if cfg, err := runpulse.ConfigFromEnv(); err != nil {
@@ -39,8 +55,33 @@ func registerPulseAPI(mux *http.ServeMux, env string) error {
 		h.Runs = eng
 	}
 
+	// Live Pulse: opt-in continuous telemetry; independent of Run Pulse.
+	if lcfg, err := live.ConfigFromEnv(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "# → Live Pulse disabled: %v\n", err)
+	} else if lcfg.Available() {
+		liveRT, err := live.NewRuntime(live.Options{
+			Config:   lcfg,
+			PulseDir: dir,
+			Mapper:   mapper,
+		})
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "# → Live Pulse disabled: %v\n", err)
+		} else {
+			reader.WithObservationStore(liveRT.ObservationStore())
+			h.Live = liveRT
+			rt.live = liveRT
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			liveRT.Start(ctx)
+			_, _ = fmt.Fprintf(os.Stderr, "# → Live Pulse enabled (poll %s → %s)\n", lcfg.PollInterval, lcfg.PrometheusURL)
+		}
+	} else if lcfg.Enabled {
+		_, _ = fmt.Fprintf(os.Stderr, "# → Live Pulse unavailable: %s\n", lcfg.UnavailabilityReason())
+	}
+
 	h.Register(mux)
-	return nil
+	return rt, nil
 }
 
 // vizPulseDataDir mirrors pulseDataDir without requiring a cobra command.

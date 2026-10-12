@@ -100,6 +100,7 @@ Keep Pulse modular and optional relative to Part A. Prefer packages under `inter
 | Change correlation | `internal/pulse/correlate` | Deterministic temporal/service ranking; **not** causation. |
 | Change attribution eval | `internal/pulse/changeeval` | Scores correlations vs fixture expected change IDs **after** correlation. |
 | Read-only viz API | `internal/pulse/api` | Localhost JSON for services/incidents/changes/correlation; mounts on existing `perch viz` mux. |
+| Live Pulse runtime | `internal/pulse/live` | Opt-in viz collector: loopback Prometheus → detect → incident Upsert → `/api/pulse/live/*` snapshot. |
 
 Phase 2 local target setup (docs/scripts, not a collector): [`astronomy-shop.md`](astronomy-shop.md), [`examples/astronomy-shop/`](../examples/astronomy-shop/).  
 Scenario harness: [`examples/astronomy-shop/scenarios/`](../examples/astronomy-shop/scenarios/).  

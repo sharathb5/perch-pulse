@@ -281,6 +281,35 @@ func (d *Detector) OpenFindings() []Finding {
 	return out
 }
 
+// HasBaseline reports whether serviceID has enough samples in both baseline and
+// current windows for at least one known signal. Insufficient history is not
+// recovery and must not be treated as a healthy "no finding" claim.
+func (d *Detector) HasBaseline(serviceID string, now time.Time) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	now = now.UTC()
+	if now.IsZero() {
+		now = d.nowFunc().UTC()
+	}
+	curStart := now.Add(-d.cfg.CurrentWindow)
+	baseEnd := curStart
+	baseStart := baseEnd.Add(-d.cfg.BaselineWindow)
+	for _, sig := range []SignalType{SignalLatencyMS, SignalErrorRate, SignalCallRate} {
+		samples := d.series[SeriesKey{ServiceID: serviceID, Signal: sig}]
+		if len(samples) == 0 {
+			continue
+		}
+		if _, err := WindowStats(samples, curStart, now, d.cfg.MinCurrentSamples); err != nil {
+			continue
+		}
+		if _, err := WindowStats(samples, baseStart, baseEnd, d.cfg.MinBaselineSamples); err != nil {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 func (c Config) decide(sig SignalType, obs, base Stats, callObs *Stats) (fire bool, score, thresh float64, sev Severity, summary string) {
 	switch sig {
 	case SignalLatencyMS:
