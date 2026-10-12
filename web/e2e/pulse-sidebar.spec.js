@@ -67,6 +67,36 @@ test.describe('Pulse sidebar (Milestone C)', () => {
     )
   })
 
+  test('Investigate assembles evidence report with labels and feedback', async ({ page }) => {
+    await mockApis(page, historical)
+    await page.goto('/stack/fixture-stack?pulse=incidents')
+    await page.getByTestId('pulse-incident-browser').locator('button').first().click()
+    await expect(page.getByTestId('pulse-investigate-btn')).toBeVisible()
+    await page.getByTestId('pulse-investigate-btn').click()
+    await expect(page.getByTestId('pulse-evidence-investigation')).toBeVisible()
+    await expect(page.getByTestId('pulse-evidence-not-diagnosed')).toContainText('diagnosed')
+    await expect(page.getByTestId('pulse-evidence-hypotheses')).toContainText('HYPOTHESIS')
+    await expect(page.getByTestId('pulse-evidence-hypotheses')).toContainText('latency')
+    await expect(page.getByTestId('pulse-evidence-unknowns')).toContainText('UNKNOWN')
+    await expect(page.getByTestId('pulse-evidence-symptoms')).toBeVisible()
+    await page.getByTestId('pulse-feedback-assessment').selectOption('useful')
+    await page.getByTestId('pulse-feedback-rationale').fill('helpful leads')
+    await page.getByTestId('pulse-feedback-submit').click()
+    await expect(page.getByTestId('pulse-feedback-ok')).toContainText('Feedback recorded')
+    // Run tab still reachable
+    await page.getByTestId('pulse-tab-run').click()
+    await expect(page.getByTestId('pulse-run-panel')).toBeVisible()
+  })
+
+  test('Investigate backend failure is surfaced without breaking graph', async ({ page }) => {
+    await mockApis(page, { ...historical, pulseInvestigationStatus: 503 })
+    await page.goto('/stack/fixture-stack?pulse=incidents')
+    await page.getByTestId('pulse-incident-browser').locator('button').first().click()
+    await page.getByTestId('pulse-investigate-btn').click()
+    await expect(page.getByTestId('pulse-investigate-error')).toBeVisible()
+    await expect(page.getByTestId('perch-graph')).toBeVisible()
+  })
+
   test('graph incident navigation opens sidebar; affected service selects node', async ({
     page,
   }) => {

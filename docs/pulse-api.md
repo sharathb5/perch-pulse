@@ -1,8 +1,8 @@
-# Pulse HTTP API (Milestone A + E + Live)
+# Pulse HTTP API (Milestone A + E + Live + F1)
 
-Localhost JSON for the Perch React UI. Mounted on the existing `perch viz` server (127.0.0.1). See [ADR-014](DECISIONS.md), [ADR-020](DECISIONS.md), and [ADR-022](DECISIONS.md).
+Localhost JSON for the Perch React UI. Mounted on the existing `perch viz` server (127.0.0.1). See [ADR-014](DECISIONS.md), [ADR-020](DECISIONS.md), [ADR-022](DECISIONS.md), and [ADR-023](DECISIONS.md).
 
-Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted POST for on-demand diagnostics — see [`pulse-run.md`](pulse-run.md). Live Pulse adds opt-in continuous snapshot routes — see [`pulse-live.md`](pulse-live.md).
+Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted POST for on-demand diagnostics — see [`pulse-run.md`](pulse-run.md). Live Pulse adds opt-in continuous snapshot routes — see [`pulse-live.md`](pulse-live.md). Investigations (F1) assemble evidence snapshots — see [`pulse-investigation.md`](pulse-investigation.md).
 
 ## Routes
 
@@ -11,6 +11,7 @@ Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted PO
 | GET | `/api/pulse/services` | Pulse intelligence per known service ID |
 | GET | `/api/pulse/incidents` | Recent incidents (`?limit=`, default 50, max 200) |
 | GET | `/api/pulse/incidents/{id...}` | Incident detail + on-read correlation |
+| GET | `/api/pulse/incidents/{id...}/investigation-context` | Agent-oriented investigation context (suffix on `{id...}`) |
 | GET | `/api/pulse/changes` | Recorded changes (`?limit=`) |
 | GET | `/api/pulse/changes/{id...}` | Change detail |
 | GET | `/api/pulse/workflows` | Run Pulse allowlisted workflow catalog |
@@ -19,6 +20,10 @@ Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted PO
 | GET | `/api/pulse/live/status` | Live Pulse runtime status (opt-in collector) |
 | GET | `/api/pulse/live/services` | Live per-service telemetry snapshot |
 | GET | `/api/pulse/live/incidents` | Live/active vs recovered incident labels |
+| POST | `/api/pulse/investigations` | Assemble evidence investigation (loopback only) |
+| GET | `/api/pulse/investigations/{id...}` | Persisted investigation snapshot |
+| POST | `/api/pulse/investigations/{id...}/feedback` | Record investigation feedback (loopback only) |
+| GET | `/api/pulse/investigations/{id...}/feedback` | List feedback for an investigation |
 
 `{id...}` is required because Pulse IDs embed `/` (e.g. `inc|astronomy/local/shipping|…`).
 

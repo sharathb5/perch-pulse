@@ -1,0 +1,65 @@
+{
+  "schema_version": "pulse.api.investigation.create.v1",
+  "generated_at": "2026-10-11T12:00:00Z",
+  "investigation": {
+    "schema_version": "pulse.investigation.v1",
+    "investigation_id": "inv|inc_fixture_api|abcd1234ef00|20261011T120000.000000000Z",
+    "incident_id": "inc|fixture/production/api|20261010T050000.000000000Z",
+    "environment": "production",
+    "affected_service_ids": ["fixture/production/api"],
+    "incident_state": "recovered",
+    "generated_at": "2026-10-11T12:00:00Z",
+    "evidence_collected_at": "2026-10-10T05:10:00Z",
+    "evidence_freshness": "incident_snapshot",
+    "generation_method": "deterministic_rules_v1",
+    "content_fingerprint": "abcd1234ef001122",
+    "observed_symptoms": [
+      {
+        "id": "symptom:fixture/production/api:latency_ms",
+        "service_id": "fixture/production/api",
+        "signal_type": "latency_ms",
+        "statement": "api showed anomalous latency_ms during the recorded incident window.",
+        "classification": "OBSERVED",
+        "evidence_refs": ["phase:during"],
+        "during_median": 220,
+        "before_median": 42.5
+      }
+    ],
+    "baseline_comparisons": [],
+    "before": { "phase": "before", "window": { "start": "2026-10-10T04:50:00Z", "end": "2026-10-10T05:00:00Z" }, "available": true },
+    "during": { "phase": "during", "window": { "start": "2026-10-10T05:00:00Z", "end": "2026-10-10T05:10:00Z" }, "available": true },
+    "after": { "phase": "after", "window": { "start": "2026-10-10T05:10:00Z", "end": "2026-10-10T05:20:00Z" }, "available": true },
+    "topology": {
+      "primary_service_id": "fixture/production/api",
+      "nodes": [],
+      "expansion_depth": 1
+    },
+    "change_candidates": [],
+    "strong_change_candidate": false,
+    "missing_evidence": ["no ranked change candidates in lookback window"],
+    "hypotheses": [
+      {
+        "hypothesis_id": "hyp|latency_regression|fixture_production_api",
+        "statement": "api latency increased relative to its observed before-window baseline (during median 220ms vs before 42ms).",
+        "classification": "INFERRED",
+        "supporting_evidence_refs": ["symptom:fixture/production/api:latency_ms", "phase:during"],
+        "missing_evidence": ["span breakdown for slow dependency vs local work"],
+        "suggested_verification": "Inspect latency histograms/traces for fixture/production/api during the incident window.",
+        "kind": "latency_regression"
+      }
+    ],
+    "suggested_verification_steps": [
+      "Treat this investigation as an evidence package — not a confirmed root-cause diagnosis."
+    ],
+    "limitations": [
+      "Investigation report generation does not confirm a root cause.",
+      "Deterministic rules only — no LLM was used."
+    ],
+    "source_references": [],
+    "unknowns": ["Root cause is UNKNOWN — investigation does not diagnose the incident."],
+    "diagnosed": false
+  },
+  "limitations": [
+    "Investigation is an evidence snapshot — not a confirmed root-cause diagnosis."
+  ]
+}

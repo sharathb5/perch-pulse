@@ -13,6 +13,7 @@ import (
 	"github.com/yashg4509/perch/internal/pulse/change"
 	"github.com/yashg4509/perch/internal/pulse/correlate"
 	"github.com/yashg4509/perch/internal/pulse/incident"
+	"github.com/yashg4509/perch/internal/pulse/investigation"
 )
 
 func newPulseCmd() *cobra.Command {
@@ -27,6 +28,8 @@ func newPulseCmd() *cobra.Command {
 	cmd.AddCommand(newPulseIncidentsCmd())
 	cmd.AddCommand(newPulseIncidentGetCmd())
 	cmd.AddCommand(newPulseContextCmd())
+	cmd.AddCommand(newPulseInvestigateCmd())
+	cmd.AddCommand(newPulseInvestigationContextCmd())
 	return cmd
 }
 
@@ -335,5 +338,81 @@ func runPulseContext(cmd *cobra.Command, args []string) error {
 		}
 	}
 	_, err = fmt.Fprint(cmd.OutOrStdout(), correlate.FormatAgentContext(inc, rep, top))
+	return err
+}
+
+func newPulseInvestigateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "investigate",
+		Short: "Assemble a versioned evidence-backed investigation for an incident (no LLM)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runPulseInvestigate,
+	}
+	cmd.Flags().Bool("reuse-identical", true, "Return existing snapshot when content fingerprint matches")
+	cmd.Flags().Bool("for-agent", false, "Emit agent-context JSON instead of full investigation")
+	return cmd
+}
+
+func runPulseInvestigate(cmd *cobra.Command, args []string) error {
+	dir, err := pulseDataDir(cmd)
+	if err != nil {
+		return err
+	}
+	reuse, _ := cmd.Flags().GetBool("reuse-identical")
+	forAgent, _ := cmd.Flags().GetBool("for-agent")
+	svc := &investigation.Service{
+		Incidents: incident.NewFileStore(dir),
+		Changes:   change.NewFileStore(dir),
+		Store:     investigation.NewFileStore(dir),
+	}
+	inv, err := svc.Create(investigation.CreateOptions{
+		IncidentID:     args[0],
+		ReuseIdentical: reuse,
+	})
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	if forAgent {
+		return enc.Encode(investigation.BuildAgentContext(inv))
+	}
+	return enc.Encode(inv)
+}
+
+func newPulseInvestigationContextCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "investigation-context",
+		Short: "Emit FACTS/HYPOTHESES/UNKNOWN/NEXT STEPS agent context for an incident",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runPulseInvestigationContext,
+	}
+	cmd.Flags().Bool("json", false, "Emit versioned agent-context JSON instead of plain text")
+	return cmd
+}
+
+func runPulseInvestigationContext(cmd *cobra.Command, args []string) error {
+	dir, err := pulseDataDir(cmd)
+	if err != nil {
+		return err
+	}
+	asJSON, _ := cmd.Flags().GetBool("json")
+	svc := &investigation.Service{
+		Incidents: incident.NewFileStore(dir),
+		Changes:   change.NewFileStore(dir),
+		Store:     investigation.NewFileStore(dir),
+	}
+	// CLI may assemble (explicit local action); HTTP GET context remains read-only.
+	inv, err := svc.Create(investigation.CreateOptions{IncidentID: args[0], ReuseIdentical: true})
+	if err != nil {
+		return err
+	}
+	ctx := investigation.BuildAgentContext(inv)
+	if asJSON {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(ctx)
+	}
+	_, err = fmt.Fprint(cmd.OutOrStdout(), investigation.FormatAgentContextText(inv))
 	return err
 }

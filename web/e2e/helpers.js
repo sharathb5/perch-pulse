@@ -35,6 +35,7 @@ export const fixtures = {
   pulseLiveStatusWarming: loadFixture('pulse.live.status.warming.json'),
   pulseLiveServicesRegression: loadFixture('pulse.live.services.regression.json'),
   pulseLiveIncidentsActive: loadFixture('pulse.live.incidents.active.json'),
+  pulseInvestigationCreate: loadFixture('pulse.investigation.create.json'),
 }
 
 /**
@@ -57,6 +58,8 @@ export const fixtures = {
  *   pulseLiveStatus?: object,
  *   pulseLiveServices?: object,
  *   pulseLiveIncidents?: object,
+ *   pulseInvestigation?: object,
+ *   pulseInvestigationStatus?: number,
  * }} opts
  */
 export async function mockApis(page, opts = {}) {
@@ -98,6 +101,8 @@ export async function mockApis(page, opts = {}) {
       status: pulseLiveStatus.status,
       limitations: [],
     })
+  const pulseInvestigation = opts.pulseInvestigation ?? fixtures.pulseInvestigationCreate
+  const pulseInvestigationStatus = opts.pulseInvestigationStatus ?? 200
   const pulseLiveIncidents =
     opts.pulseLiveIncidents ??
     ({
@@ -214,6 +219,61 @@ export async function mockApis(page, opts = {}) {
     })
   })
 
+  await page.route('**/api/pulse/investigations**', async (route) => {
+    const req = route.request()
+    const path = new URL(req.url()).pathname
+    if (pulseInvestigationStatus >= 400) {
+      await route.fulfill({
+        status: pulseInvestigationStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'pulse.api.error.v1',
+          error: 'investigation unavailable',
+          code: 'unavailable',
+        }),
+      })
+      return
+    }
+    if (req.method() === 'POST' && path.endsWith('/feedback')) {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'pulse.api.investigation.feedback.create.v1',
+          generated_at: '2026-10-11T12:00:00Z',
+          feedback: {
+            schema_version: 'pulse.investigation.feedback.v1',
+            feedback_id: 'fb|test',
+            investigation_id: pulseInvestigation.investigation.investigation_id,
+            incident_id: pulseInvestigation.investigation.incident_id,
+            timestamp: '2026-10-11T12:00:00Z',
+            assessment: 'useful',
+          },
+          limitations: ['Feedback is a human assessment — not verified ground truth.'],
+        }),
+      })
+      return
+    }
+    if (req.method() === 'POST') {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(pulseInvestigation),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schema_version: 'pulse.api.investigation.v1',
+        generated_at: '2026-10-11T12:00:00Z',
+        investigation: pulseInvestigation.investigation,
+        limitations: pulseInvestigation.limitations,
+      }),
+    })
+  })
+
   await page.route('**/api/pulse/incidents**', async (route) => {
     if (pulseStatus >= 400) {
       await route.fulfill({
@@ -228,6 +288,29 @@ export async function mockApis(page, opts = {}) {
       return
     }
     const path = new URL(route.request().url()).pathname
+    if (path.endsWith('/investigation-context')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 'pulse.api.investigation_context.v1',
+          generated_at: '2026-10-11T12:00:00Z',
+          investigation: pulseInvestigation.investigation,
+          agent_context: {
+            schema_version: 'pulse.investigation.agent_context.v1',
+            investigation_id: pulseInvestigation.investigation.investigation_id,
+            incident_id: pulseInvestigation.investigation.incident_id,
+            facts: ['fixture fact'],
+            hypotheses: ['fixture hypothesis'],
+            unknown: ['Root cause is UNKNOWN'],
+            next_steps: ['Verify carefully'],
+            diagnosed: false,
+          },
+          limitations: [],
+        }),
+      })
+      return
+    }
     // Detail: /api/pulse/incidents/{id...} — list is exactly /api/pulse/incidents
     const isDetail = /\/api\/pulse\/incidents\/.+/.test(path)
     await route.fulfill({
