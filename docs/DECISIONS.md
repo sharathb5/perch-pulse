@@ -28,6 +28,42 @@ Rules:
 
 ---
 
+## ADR-023: Evidence-backed investigation without LLM (Milestone F1)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** After Live fault lifecycle proof, engineers and agents need a bounded,
+versioned investigation package over existing Pulse evidence. An LLM loop and
+Databricks/MLflow eval are future work; F1 must ship without external AI APIs and
+must not invent root causes from correlation.
+
+**Decision:**
+1. Add `internal/pulse/investigation` with schemas `pulse.investigation.v1` and
+   `pulse.investigation.feedback.v1`. Assembler is read-only over incident +
+   on-read correlation + depth-1 astronomy topology; Run Pulse only when
+   explicitly linked.
+2. Deterministic rules engine (`deterministic_rules_v1`) is the only `Proposer`
+   implementation; narrow `EvidenceSnapshot` → `Proposal` seam reserved for
+   future LLM proposers.
+3. Persist immutable snapshots under the Pulse data dir (atomic JSON); feedback
+   is a separate record that cannot mutate incidents or hypotheses.
+4. Mount investigation/feedback routes on viz with the same loopback POST
+   guards as Run Pulse. Agent context separates FACTS / HYPOTHESES / UNKNOWN /
+   NEXT STEPS (`pulse.investigation.agent_context.v1`).
+5. UI adds an Investigate action inside the existing Pulse sidebar investigation
+   view (no dashboard redesign).
+
+**Consequences:** Agents can consume stable JSON without Go structs; eval harness
+can score citation coverage and false causal attribution against the
+deterministic baseline. Suffix routing is required because Go ServeMux forbids
+`{…}` mid-path.
+
+**Alternatives considered:** Auto-running Run Pulse on Investigate (rejected:
+side effects); LLM summaries in F1 (rejected: scope/secrets); mutating old
+snapshots on recovery (rejected: evidence integrity).
+
 ## ADR-024: Live Pulse fault-to-recovery validation (fixture + optional live smoke)
 
 **Date:** 2026-10-12  

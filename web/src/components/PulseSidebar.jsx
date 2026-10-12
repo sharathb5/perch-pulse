@@ -2,6 +2,8 @@ import { X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { usePulseIncident } from '../hooks/usePulseIncident.js'
+import { usePulseInvestigation } from '../hooks/usePulseInvestigation.js'
+import { FEEDBACK_ASSESSMENTS } from '../lib/investigation.js'
 import {
   LIVE_LIFECYCLE,
   formatLiveBaseline,
@@ -642,9 +644,176 @@ function IncidentsPanel({
   )
 }
 
+function ClassificationBadge({ label }) {
+  const tone =
+    label === 'OBSERVED'
+      ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
+      : label === 'HYPOTHESIS' || label === 'INFERRED'
+        ? 'text-amber-800 bg-amber-50 border-amber-200'
+        : 'text-gray-600 bg-gray-50 border-gray-200'
+  return (
+    <span className={`inline-block rounded border px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${tone}`}>
+      {label}
+    </span>
+  )
+}
+
+function EvidenceInvestigationReport({
+  investigation,
+  assessment,
+  setAssessment,
+  feedbackRationale,
+  setFeedbackRationale,
+  feedbackStatus,
+  onSubmitFeedback,
+}) {
+  return (
+    <section data-testid="pulse-evidence-investigation" className="space-y-2 rounded border border-gray-200 bg-white px-2 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[10px] uppercase tracking-wide text-gray-400">Evidence investigation</h3>
+        <ClassificationBadge label="OBSERVED" />
+      </div>
+      <p className="font-mono text-[10px] text-gray-500 break-all">{investigation.investigationId}</p>
+      <p className="text-[10px] text-gray-500">
+        State {investigation.incidentState || '—'} · freshness {investigation.evidenceFreshness || '—'} ·{' '}
+        {investigation.generationMethod || 'deterministic'}
+      </p>
+      <p data-testid="pulse-evidence-not-diagnosed" className="text-[10px] text-amber-800">
+        Report generated ≠ diagnosed. Hypotheses are INFERRED.
+      </p>
+
+      <div data-testid="pulse-evidence-symptoms">
+        <div className="mb-0.5 flex items-center gap-1">
+          <h4 className="text-[10px] uppercase tracking-wide text-gray-400">Symptoms</h4>
+          <ClassificationBadge label="OBSERVED" />
+        </div>
+        <ul className="list-disc space-y-0.5 pl-4">
+          {(investigation.observedSymptoms ?? []).length === 0 ? (
+            <li className="text-gray-500">No observed symptoms in snapshot.</li>
+          ) : (
+            (investigation.observedSymptoms ?? []).map((s) => (
+              <li key={s.id || s.statement}>{s.statement || s.id}</li>
+            ))
+          )}
+        </ul>
+      </div>
+
+      <div data-testid="pulse-evidence-hypotheses">
+        <div className="mb-0.5 flex items-center gap-1">
+          <h4 className="text-[10px] uppercase tracking-wide text-gray-400">Hypotheses</h4>
+          <ClassificationBadge label="HYPOTHESIS" />
+        </div>
+        <ul className="space-y-1.5">
+          {(investigation.hypotheses ?? []).map((h) => (
+            <li
+              key={h.hypothesisId}
+              data-testid={`pulse-hyp-${encodeURIComponent(h.hypothesisId)}`}
+              className="rounded border border-amber-100 bg-amber-50/40 px-2 py-1.5"
+            >
+              <div className="font-mono text-[10px] text-gray-500">{h.hypothesisId}</div>
+              <p className="text-gray-800">{h.statement}</p>
+              {(h.supportingEvidenceRefs ?? []).length > 0 && (
+                <p className="mt-0.5 font-mono text-[10px] text-gray-500">
+                  evidence: {(h.supportingEvidenceRefs ?? []).slice(0, 4).join(', ')}
+                </p>
+              )}
+              {h.suggestedVerification && (
+                <p className="mt-0.5 text-[10px] text-gray-600">Verify: {h.suggestedVerification}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div data-testid="pulse-evidence-unknowns">
+        <div className="mb-0.5 flex items-center gap-1">
+          <h4 className="text-[10px] uppercase tracking-wide text-gray-400">Unknown / missing</h4>
+          <ClassificationBadge label="UNKNOWN" />
+        </div>
+        <ul className="list-disc space-y-0.5 pl-4 text-gray-600">
+          {[...(investigation.unknowns ?? []), ...(investigation.missingEvidence ?? [])]
+            .slice(0, 8)
+            .map((u) => (
+              <li key={u}>{u}</li>
+            ))}
+        </ul>
+      </div>
+
+      <div data-testid="pulse-evidence-next-steps">
+        <h4 className="text-[10px] uppercase tracking-wide text-gray-400">Suggested verification</h4>
+        <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-gray-600">
+          {(investigation.suggestedVerificationSteps ?? []).slice(0, 6).map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div data-testid="pulse-evidence-feedback" className="space-y-1 border-t border-gray-100 pt-2">
+        <h4 className="text-[10px] uppercase tracking-wide text-gray-400">Feedback</h4>
+        <p className="text-[10px] text-gray-500">
+          Optional quality rating — not verified ground truth.
+        </p>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] text-gray-400">Assessment</span>
+          <select
+            data-testid="pulse-feedback-assessment"
+            value={assessment}
+            onChange={(e) => setAssessment(e.target.value)}
+            className="rounded border border-gray-200 bg-white px-1.5 py-1 text-[11px]"
+          >
+            {FEEDBACK_ASSESSMENTS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] text-gray-400">Rationale (optional)</span>
+          <textarea
+            data-testid="pulse-feedback-rationale"
+            value={feedbackRationale}
+            onChange={(e) => setFeedbackRationale(e.target.value)}
+            rows={2}
+            className="rounded border border-gray-200 bg-white px-1.5 py-1 text-[11px]"
+          />
+        </label>
+        <button
+          type="button"
+          data-testid="pulse-feedback-submit"
+          onClick={onSubmitFeedback}
+          className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-800 hover:bg-gray-50"
+        >
+          Submit feedback
+        </button>
+        {feedbackStatus?.ok && (
+          <p data-testid="pulse-feedback-ok" className="text-emerald-700">
+            Feedback recorded.
+          </p>
+        )}
+        {feedbackStatus && !feedbackStatus.ok && (
+          <p data-testid="pulse-feedback-error" className="text-red-600">
+            {feedbackStatus.error}
+          </p>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function InvestigationView({ incidentId, graphNodeByServiceId, stackName, nodeId, onBack }) {
   const navigate = useNavigate()
   const { detail, loading, error } = usePulseIncident(incidentId)
+  const {
+    investigation,
+    loading: invLoading,
+    error: invError,
+    feedbackStatus,
+    create: createInvestigation,
+    submitFeedback,
+  } = usePulseInvestigation(incidentId)
+  const [assessment, setAssessment] = useState('useful')
+  const [feedbackRationale, setFeedbackRationale] = useState('')
   const incident = detail?.incident
   const correlation = detail?.correlation
   const digestRows = useMemo(
@@ -685,6 +854,45 @@ function InvestigationView({ incidentId, graphNodeByServiceId, stackName, nodeId
 
       {incident && (
         <>
+          <section data-testid="pulse-investigation-actions" className="space-y-1">
+            <button
+              type="button"
+              data-testid="pulse-investigate-btn"
+              onClick={() => void createInvestigation()}
+              disabled={invLoading}
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {invLoading ? 'Investigating…' : investigation ? 'Refresh investigation' : 'Investigate'}
+            </button>
+            <p className="text-[10px] text-gray-500">
+              Assembles a bounded evidence snapshot — not a confirmed root cause. No LLM.
+            </p>
+            {invError && (
+              <p data-testid="pulse-investigate-error" className="text-red-600">
+                {invError}
+              </p>
+            )}
+          </section>
+
+          {investigation && (
+            <EvidenceInvestigationReport
+              investigation={investigation}
+              assessment={assessment}
+              setAssessment={setAssessment}
+              feedbackRationale={feedbackRationale}
+              setFeedbackRationale={setFeedbackRationale}
+              feedbackStatus={feedbackStatus}
+              onSubmitFeedback={() =>
+                void submitFeedback({
+                  assessment,
+                  // Do not invent useful/rejected hypothesis selections.
+                  usefulHypothesisIds: [],
+                  rationale: feedbackRationale,
+                })
+              }
+            />
+          )}
+
           <section data-testid="pulse-investigation-summary" className="space-y-1">
             <h3 className="text-[10px] uppercase tracking-wide text-gray-400">Incident summary</h3>
             <div className="break-all font-mono text-[10px] text-gray-600">{incident.incidentId}</div>

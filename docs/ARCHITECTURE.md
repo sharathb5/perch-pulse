@@ -168,11 +168,11 @@ Solid edges mark implemented package relationships that already exist in-tree
 
 | Module | Intent | Databricks |
 |--------|--------|------------|
-| Evidence / investigation | Assemble citations from collectors + topology | Not required for assembly |
+| Evidence / investigation | `internal/pulse/investigation` assembles citations from incidents + correlate + topology (F1 deterministic) | Not required for assembly |
 | Baselines / analytics | Compare current signals to stored history | Optional amplify |
 | File retention backend | Durable local persistence implementing `store.Store` | Not required |
 | Deploy impact | Correlate deploys with health/log shifts | Optional for large joins |
-| Agent context packager | Stable schemas; evidence vs inference | Not required |
+| Agent context packager | `pulse.investigation.agent_context.v1` (+ existing correlate briefs) | Not required |
 | Databricks backend | Warehouse-scale analytics | **Optional only** |
 
 ### Integration rules

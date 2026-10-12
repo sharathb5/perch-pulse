@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	pulseapi "github.com/yashg4509/perch/internal/pulse/api"
+	"github.com/yashg4509/perch/internal/pulse/investigation"
 	"github.com/yashg4509/perch/internal/pulse/live"
 	"github.com/yashg4509/perch/internal/pulse/runpulse"
 )
@@ -44,6 +45,12 @@ func registerPulseAPI(mux *http.ServeMux, env string, ctx context.Context) (*pul
 		return nil, err
 	}
 	h := &pulseapi.Handler{Reader: reader}
+	h.Investigations = &investigation.Service{
+		Incidents: reader.Incidents,
+		Changes:   reader.Changes,
+		Store:     investigation.NewFileStore(dir),
+		Mapper:    mapper,
+	}
 	rt := &pulseRuntime{}
 
 	// Run Pulse: explicit env config; invalid allowlist → engine omitted (workflows 503 / unavailable).

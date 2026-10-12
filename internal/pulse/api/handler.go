@@ -10,18 +10,22 @@ import (
 	"github.com/yashg4509/perch/internal/pulse/change"
 	"github.com/yashg4509/perch/internal/pulse/correlate"
 	"github.com/yashg4509/perch/internal/pulse/incident"
+	"github.com/yashg4509/perch/internal/pulse/investigation"
 	"github.com/yashg4509/perch/internal/pulse/runpulse"
 )
 
 // Handler serves Pulse JSON on the existing viz mux.
 // Historical Pulse routes remain GET-only; Run Pulse adds allowlisted POST /api/pulse/runs.
 // Live Pulse adds optional GET /api/pulse/live/* over a collector snapshot.
+// Milestone F1 adds investigation assemble/feedback POSTs (loopback-only).
 type Handler struct {
 	Reader *Reader
 	// Runs is optional; when nil, workflow/run endpoints return 503.
 	Runs *runpulse.Engine
 	// Live is optional; when nil, live endpoints report disabled/unavailable.
 	Live LiveSource
+	// Investigations is optional; when nil, investigation endpoints return 503.
+	Investigations *investigation.Service
 }
 
 // Register mounts Pulse routes on mux.
@@ -29,11 +33,13 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/pulse/services", h.handleServices)
 	mux.HandleFunc("GET /api/pulse/incidents", h.handleIncidents)
 	// {id...} because Pulse incident/change IDs embed '/' (e.g. astronomy/local/shipping).
+	// Suffix /investigation-context is handled inside handleIncidentDetail (Go mux forbids {...} mid-path).
 	mux.HandleFunc("GET /api/pulse/incidents/{id...}", h.handleIncidentDetail)
 	mux.HandleFunc("GET /api/pulse/changes", h.handleChanges)
 	mux.HandleFunc("GET /api/pulse/changes/{id...}", h.handleChangeDetail)
 	h.registerRunRoutes(mux)
 	h.registerLiveRoutes(mux)
+	h.registerInvestigationRoutes(mux)
 }
 
 func (h *Handler) handleServices(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +106,12 @@ func (h *Handler) handleIncidentDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
+	// GET .../incidents/{incidentID}/investigation-context (suffix on {...} catch-all).
+	if strings.HasSuffix(id, "/investigation-context") {
+		incidentID := strings.TrimSuffix(id, "/investigation-context")
+		h.serveInvestigationContext(w, r, incidentID)
+		return
+	}
 	if err := ValidateResourceID(id); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_id", err.Error())
 		return
