@@ -14,6 +14,14 @@ SENSITIVE_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Token-like substrings that must never appear in operator-facing errors.
+SENSITIVE_VALUE_RE = re.compile(
+    r"(?i)(sk-[a-z0-9]{8,}|bearer\s+[a-z0-9\-._~+/]+=*|dapi[a-f0-9]{20,})"
+)
+
+# Live MLflow HTTP/filesystem ops stay bounded — no automatic billable retries.
+LIVE_MLFLOW_TIMEOUT_SEC = 30
+
 
 class MLflowClient(Protocol):
     def log_run(self, payload: dict[str, Any]) -> str:
@@ -58,6 +66,7 @@ class EvalLogResult:
     problems: list[str] = field(default_factory=list)
     artifact: dict[str, Any] | None = None
     live_executed: bool = False
+    error_category: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +78,7 @@ class EvalLogResult:
             "problems": list(self.problems),
             "artifact": self.artifact,
             "live_executed": self.live_executed,
+            "error_category": self.error_category,
         }
 
 
@@ -86,6 +96,40 @@ def redact_mapping(data: dict[str, Any]) -> dict[str, Any]:
         else:
             out[k] = v
     return out
+
+
+def sanitize_error_message(exc: BaseException | str) -> str:
+    """Preserve error class/category text without leaking credential material."""
+    text = str(exc)
+    text = SENSITIVE_VALUE_RE.sub("[redacted]", text)
+    # Scrub query-string style secrets and common env dumps.
+    text = re.sub(
+        r"(?i)(api[_-]?key|token|password|secret|authorization)\s*[:=]\s*\S+",
+        r"\1=[redacted]",
+        text,
+    )
+    if len(text) > 400:
+        text = text[:400] + "…"
+    return text
+
+
+def classify_mlflow_error(exc: BaseException) -> str:
+    """Map exceptions to stable categories without inventing success."""
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    if isinstance(exc, ImportError) or "not installed" in msg:
+        return "mlflow_unavailable"
+    if isinstance(exc, TimeoutError) or "timed out" in msg or "timeout" in msg:
+        return "timeout"
+    if any(s in msg for s in ("401", "403", "unauthorized", "forbidden", "permission", "auth")):
+        return "auth_rejected"
+    if any(s in msg for s in ("connection", "connect", "dns", "network", "refused", "unreachable")):
+        return "connection_failed"
+    if any(s in msg for s in ("invalid", "rejected", "bad request", "400", "422")):
+        return "request_rejected"
+    if name:
+        return f"provider_error:{name}"
+    return "provider_error"
 
 
 def metrics_from_eval_report(report: dict[str, Any]) -> tuple[dict[str, float], list[str]]:
@@ -182,9 +226,24 @@ def log_eval_report(
     live: bool = False,
 ) -> EvalLogResult:
     if isinstance(report, (str, Path)):
-        report = json.loads(Path(report).read_text(encoding="utf-8"))
+        try:
+            report = json.loads(Path(report).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return EvalLogResult(
+                ok=False,
+                run_id=None,
+                problems=[f"report unreadable: {sanitize_error_message(exc)}"],
+                error_category="report_unreadable",
+                live_executed=False,
+            )
     if not isinstance(report, dict):
-        return EvalLogResult(ok=False, run_id=None, problems=["report must be an object"])
+        return EvalLogResult(
+            ok=False,
+            run_id=None,
+            problems=["report must be an object"],
+            error_category="invalid_report",
+            live_executed=False,
+        )
 
     payload = build_eval_payload(report)
     result = EvalLogResult(
@@ -195,41 +254,69 @@ def log_eval_report(
         tags=payload["tags"],
         artifact=payload["artifact"],
         problems=list(payload["metric_problems"]),
+        live_executed=False,
     )
 
     if client is None:
         if live:
             try:
                 client = LiveMLflowClient(experiment=experiment)
-            except Exception as exc:  # noqa: BLE001
-                result.problems.append(f"mlflow unavailable: {exc}")
+            except Exception as exc:  # noqa: BLE001 — structured failure, no retry
+                cat = classify_mlflow_error(exc)
+                result.error_category = cat
+                result.problems.append(f"mlflow unavailable ({cat}): {sanitize_error_message(exc)}")
                 return result
         else:
             client = FakeMLflowClient()
 
-    run_id = client.log_run(
-        {
-            "experiment": experiment,
-            "metrics": result.metrics,
-            "params": result.params,
-            "tags": result.tags,
-            "artifact": result.artifact,
-        }
-    )
-    result.run_id = run_id
+    try:
+        run_id = client.log_run(
+            {
+                "experiment": experiment,
+                "metrics": result.metrics,
+                "params": result.params,
+                "tags": result.tags,
+                "artifact": result.artifact,
+            }
+        )
+    except Exception as exc:  # noqa: BLE001 — never claim success on partial/failed log
+        cat = classify_mlflow_error(exc)
+        result.error_category = cat
+        result.problems.append(f"mlflow log_run failed ({cat}): {sanitize_error_message(exc)}")
+        result.ok = False
+        result.run_id = None
+        result.live_executed = False
+        return result
+
+    if not run_id:
+        result.error_category = "empty_run_id"
+        result.problems.append("mlflow log_run returned empty run_id")
+        result.ok = False
+        result.live_executed = False
+        return result
+
+    result.run_id = str(run_id)
     result.ok = True
     result.live_executed = live and not isinstance(client, FakeMLflowClient)
     return result
 
 
 class LiveMLflowClient:
-    def __init__(self, *, experiment: str) -> None:
+    """Thin live wrapper. Failures surface as exceptions for log_eval_report to classify.
+
+    No automatic billable retries. Operators must re-invoke explicitly.
+    Prefer setting MLFLOW_HTTP_REQUEST_TIMEOUT in the environment (seconds) for
+    bounded HTTP; default guidance is LIVE_MLFLOW_TIMEOUT_SEC.
+    """
+
+    def __init__(self, *, experiment: str, timeout_sec: int = LIVE_MLFLOW_TIMEOUT_SEC) -> None:
         try:
             import mlflow  # type: ignore
         except ImportError as exc:
             raise ImportError("mlflow is not installed; pip install 'perch-pulse-dbx[mlflow]'") from exc
         self._mlflow = mlflow
         self._experiment = experiment
+        self._timeout_sec = max(1, int(timeout_sec))
         mlflow.set_experiment(experiment)
 
     def log_run(self, payload: dict[str, Any]) -> str:
@@ -245,6 +332,7 @@ class LiveMLflowClient:
             for k, v in (payload.get("tags") or {}).items():
                 mlflow.set_tag(k, v)
             artifact = payload.get("artifact") or {}
+            # Artifact is already redacted in build_eval_payload.
             with tempfile.TemporaryDirectory() as td:
                 path = Path(td) / "eval_summary.json"
                 path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")

@@ -301,10 +301,26 @@ def main(argv: list[str] | None = None) -> int:
                 summary["LIVE_MLFLOW_TRACKING"] = "NOT RUN"
             else:
                 mres = log_eval_report(args.report, live=True, experiment="perch-pulse-investigation-eval")
-                summary["steps"].append({"step": "mlflow", "ok": mres.ok, "run_id": mres.run_id})
-                summary["mlflow"] = "EXECUTED" if mres.live_executed else "FAILED_OR_SKIPPED"
+                summary["steps"].append(
+                    {
+                        "step": "mlflow",
+                        "ok": mres.ok,
+                        "run_id": mres.run_id,
+                        "live_executed": mres.live_executed,
+                        "error_category": mres.error_category,
+                        "problems": list(mres.problems),
+                    }
+                )
+                if mres.ok and mres.live_executed:
+                    summary["mlflow"] = "EXECUTED"
+                elif mres.ok and not mres.live_executed:
+                    # Should not happen for live=True; treat as failure honesty.
+                    summary["mlflow"] = "PARTIAL_FAILURE"
+                    ok = False
+                else:
+                    summary["mlflow"] = "FAILED"
                 summary["LIVE_MLFLOW_TRACKING"] = summary["mlflow"]
-                ok = ok and mres.ok
+                ok = ok and mres.ok and bool(mres.live_executed)
         else:
             summary["LIVE_MLFLOW_TRACKING"] = "NOT RUN — no --report"
         print(json.dumps(summary, indent=2))

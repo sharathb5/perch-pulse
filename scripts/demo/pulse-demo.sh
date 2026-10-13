@@ -3,6 +3,7 @@
 # Modes: mock (default, offline fixtures) | replay (labeled historical) | live (real telemetry; heavy)
 # Never silently mixes modes. Never overwrites investigation records.
 # Does not call paid LLM / Databricks unless explicitly authorized.
+# Never exports ambient ~/.perch / PERCH_PULSE_DIR records as synthetic_fixture.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -13,6 +14,8 @@ PHASE="all"
 AUTHORIZE_LLM=0
 AUTHORIZE_DBX=0
 AUTHORIZE_MLFLOW=0
+# Explicit path required to export real persisted Pulse records (observed_local).
+USE_REAL_PULSE_DIR=""
 # Export path must stay under repo (export-analytics --allowed-root defaults to cwd).
 OUT_DIR="${PULSE_DEMO_OUT:-$ROOT/.perch/demo-out}"
 DRY_RUN=0
@@ -21,13 +24,18 @@ usage() {
   cat <<'EOF'
 Usage: scripts/demo/pulse-demo.sh [--mode mock|replay|live] [--phase preflight|offline|live|analysis|aftercare|all]
                                   [--out-dir DIR] [--dry-run]
+                                  [--use-real-pulse-dir DIR]
                                   [--i-authorize-provider-calls] [--i-authorize-databricks-calls]
                                   [--i-authorize-mlflow-calls]
 
 Modes (never mixed silently):
-  mock   Offline fixtures only (DEFAULT). No Docker Astronomy Shop. No paid APIs.
-  replay Labeled historical demo export + UI fixtures. Not live telemetry.
+  mock   Offline fixtures only (DEFAULT). Isolated empty --pulse-dir. No Docker. No paid APIs.
+  replay Labeled historical sample export + UI fixtures. Not live telemetry.
   live   Real Astronomy Shop + error-payment fault (requires disk/ports; heavy).
+
+Real persisted Pulse data:
+  Pass --use-real-pulse-dir DIR explicitly. Provenance becomes observed_local.
+  Mock/replay refuse ambient ~/.perch and PERCH_PULSE_DIR for export.
 
 Authorization flags are required for any billable/cloud step. Default is NOT RUN.
 EOF
@@ -38,6 +46,7 @@ while [[ $# -gt 0 ]]; do
     --mode) MODE="$2"; shift 2 ;;
     --phase) PHASE="$2"; shift 2 ;;
     --out-dir) OUT_DIR="$2"; shift 2 ;;
+    --use-real-pulse-dir) USE_REAL_PULSE_DIR="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --i-authorize-provider-calls) AUTHORIZE_LLM=1; shift ;;
     --i-authorize-databricks-calls) AUTHORIZE_DBX=1; shift ;;
@@ -75,22 +84,54 @@ check_disk() {
   fi
 }
 
+# Resolve export pulse-dir + provenance from mode and explicit real-data selection.
+# Prints: <pulse_dir><TAB><provenance>
+resolve_export_source() {
+  local isolated="$OUT_DIR/demo-pulse"
+  mkdir -p "$isolated"
+
+  if [[ -n "$USE_REAL_PULSE_DIR" ]]; then
+    if [[ "$MODE" == "mock" || "$MODE" == "replay" ]]; then
+      fail "$MODE mode refuses --use-real-pulse-dir (use --mode live for observed_local exports)"
+    fi
+    [[ -d "$USE_REAL_PULSE_DIR" ]] || fail "--use-real-pulse-dir is not a directory: $USE_REAL_PULSE_DIR"
+    printf '%s\t%s\n' "$USE_REAL_PULSE_DIR" "observed_local"
+    return 0
+  fi
+
+  # Isolate from ambient real stores. Do not read PERCH_PULSE_DIR / ~/.perch.
+  printf '%s\t%s\n' "$isolated" "synthetic_fixture"
+}
+
 phase_preflight() {
   log "PREFLIGHT"
   require_cmd go
   require_cmd python3
   require_cmd make
-  if [[ "$MODE" == "live" ]]; then
-    check_disk hard
-    require_cmd docker
-    warn "LIVE mode may pull/start Astronomy Shop images — ensure disk/RAM headroom"
-    warn "Ports commonly needed: 8080 (frontend), 9090 (prometheus), 16686 (jaeger), 8081 (flagd)"
-  else
-    check_disk
-  fi
   mkdir -p "$OUT_DIR"
   log "out_dir=$OUT_DIR"
   log "mode=$MODE (explicit; not mixed)"
+  if [[ -n "$USE_REAL_PULSE_DIR" ]]; then
+    if [[ "$MODE" == "mock" || "$MODE" == "replay" ]]; then
+      fail "$MODE mode refuses --use-real-pulse-dir (use --mode live for observed_local exports)"
+    fi
+    [[ -d "$USE_REAL_PULSE_DIR" ]] || fail "--use-real-pulse-dir is not a directory: $USE_REAL_PULSE_DIR"
+    log "real pulse-dir explicitly selected: $USE_REAL_PULSE_DIR"
+  else
+    log "export pulse-dir: isolated under $OUT_DIR/demo-pulse (ambient PERCH_PULSE_DIR ignored)"
+  fi
+  if [[ "$MODE" == "live" ]]; then
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      log "dry-run: skipping live disk/docker hard requirements"
+    else
+      check_disk hard
+      require_cmd docker
+      warn "LIVE mode may pull/start Astronomy Shop images — ensure disk/RAM headroom"
+      warn "Ports commonly needed: 8080 (frontend), 9090 (prometheus), 16686 (jaeger), 8081 (flagd)"
+    fi
+  else
+    check_disk
+  fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
     log "dry-run: preflight ok"
   fi
@@ -102,8 +143,14 @@ phase_offline() {
   local export_dir="$OUT_DIR/export"
   mkdir -p "$eval_dir" "$export_dir"
 
+  local src_line pulse_dir provenance
+  src_line="$(resolve_export_source)"
+  pulse_dir="${src_line%%$'\t'*}"
+  provenance="${src_line#*$'\t'}"
+
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    log "dry-run: would run web-build-embed, investigation-eval, llm-provider-smoke, export-analytics, dbx validate"
+    log "dry-run: would run web-build-embed, investigation-eval, llm-provider-smoke, export-analytics"
+    log "dry-run: export --pulse-dir=$pulse_dir --incident-provenance=$provenance"
     return 0
   fi
 
@@ -133,12 +180,16 @@ phase_offline() {
       | tee "$OUT_DIR/llm-provider-smoke-real.json"
   fi
 
+  # Explicit --pulse-dir wins over ambient PERCH_PULSE_DIR (CLI preference).
+  # synthetic_fixture is only used with the isolated empty demo-pulse dir.
+  log "export source mode=$MODE pulse-dir=$pulse_dir provenance=$provenance"
   go run ./cmd/perch pulse export-analytics \
+    --pulse-dir "$pulse_dir" \
     --out-dir "$export_dir" \
     --eval-report "$eval_dir/report.json" \
-    --incident-provenance synthetic_fixture \
+    --incident-provenance "$provenance" \
     --json | tee "$OUT_DIR/export-analytics.json" >/dev/null
-  log "export → $export_dir (provenance=synthetic_fixture)"
+  log "export → $export_dir (provenance=$provenance)"
 
   if [[ "$MODE" == "replay" ]]; then
     log "REPLAY: also validating labeled historical sample export"
@@ -161,7 +212,11 @@ phase_offline() {
   local use_export="$export_dir"
   if [[ "$MODE" == "replay" ]]; then
     use_export="$ROOT/examples/pulse-export/sample/export"
-    log "using HISTORICAL sample export (labeled historical_demo provenance)"
+    log "using HISTORICAL sample export (labeled historical_demo / sample provenance)"
+  elif [[ "$MODE" == "mock" ]]; then
+    log "using MOCK export from isolated pulse-dir (synthetic_fixture eval rows only)"
+  else
+    log "using LIVE-mode export (provenance=$provenance)"
   fi
 
   python -m perch_pulse_dbx validate --export-dir "$use_export" --json \
@@ -224,6 +279,11 @@ phase_aftercare() {
   fi
   log "artifacts under $OUT_DIR (preserve; do not overwrite real ~/.perch investigations)"
   log "summary: mode=$MODE REAL_LLM=${AUTHORIZE_LLM} DBX=${AUTHORIZE_DBX} MLFLOW=${AUTHORIZE_MLFLOW}"
+  if [[ -n "$USE_REAL_PULSE_DIR" ]]; then
+    log "real pulse export selected: $USE_REAL_PULSE_DIR (observed_local)"
+  else
+    log "real pulse export = NOT SELECTED (isolated demo-pulse only)"
+  fi
   if [[ "$AUTHORIZE_LLM" -eq 0 ]]; then
     log "REAL LLM VALIDATION = NOT RUN"
   fi

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,9 @@ ENVELOPE_REQUIRED = (
     "provenance_class",
     "exported_at",
 )
+
+# Content fingerprints are hex digests (SHA-256 → 64 hex chars in F3a).
+FINGERPRINT_RE = re.compile(r"^[0-9a-fA-F]{32,128}$")
 
 MAX_BATCH_DEFAULT = 500
 
@@ -76,6 +80,22 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
                 raise ValueError(f"{path.name}:{lineno}: expected object")
             rows.append(obj)
     return rows
+
+
+def _manifest_expectations(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Map dataset name → manifest entry (row_count, file)."""
+    out: dict[str, dict[str, Any]] = {}
+    raw = manifest.get("datasets") or []
+    if not isinstance(raw, list):
+        return out
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        out[name] = entry
+    return out
 
 
 def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DEFAULT) -> ExportValidation:
@@ -136,6 +156,17 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
         )
         return result
 
+    # Checkpoint / manifest schema agreement when both present.
+    cp_schema = result.checkpoint.get("export_schema_version")
+    if cp_schema is not None and cp_schema != export_schema:
+        result.issues.append(
+            ValidationIssue(
+                "error",
+                "schema_version_mismatch",
+                f"checkpoint export_schema_version {cp_schema!r} != manifest {export_schema!r}",
+            )
+        )
+
     if result.quality is not None:
         if result.quality.get("schema_version") not in (None, QUALITY_REPORT_SCHEMA_VERSION):
             result.issues.append(
@@ -150,18 +181,62 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
                 ValidationIssue("error", "quality_not_ok", "quality-report.json reports ok=false")
             )
 
+    expected = _manifest_expectations(result.manifest)
     seen_keys: dict[str, set[str]] = {ds: set() for ds in SUPPORTED_DATASETS}
+
     for dataset in SUPPORTED_DATASETS:
         path = root / f"{dataset}.jsonl"
+        entry = expected.get(dataset)
+        declared_count: int | None = None
+        if entry is not None:
+            raw_count = entry.get("row_count", 0)
+            try:
+                declared_count = int(raw_count)
+            except (TypeError, ValueError):
+                result.issues.append(
+                    ValidationIssue(
+                        "error",
+                        "invalid_manifest_row_count",
+                        f"manifest dataset {dataset}: row_count {raw_count!r} is not an int",
+                        dataset=dataset,
+                    )
+                )
+                declared_count = None
+            declared_file = entry.get("file")
+            if declared_file not in (None, "", f"{dataset}.jsonl"):
+                result.issues.append(
+                    ValidationIssue(
+                        "error",
+                        "manifest_file_mismatch",
+                        f"manifest dataset {dataset}: file {declared_file!r} != {dataset}.jsonl",
+                        dataset=dataset,
+                    )
+                )
+
         if not path.is_file():
+            # Intentionally empty: listed with row_count==0 or omitted from manifest.
+            if declared_count is not None and declared_count > 0:
+                result.issues.append(
+                    ValidationIssue(
+                        "error",
+                        "missing_dataset_file",
+                        f"manifest expects {declared_count} rows for {dataset} but {dataset}.jsonl is missing",
+                        dataset=dataset,
+                    )
+                )
             result.datasets[dataset] = []
             result.counts[dataset] = 0
             continue
+
         try:
             rows = _read_jsonl(path)
         except ValueError as exc:
             result.issues.append(ValidationIssue("error", "malformed_jsonl", str(exc), dataset=dataset))
+            # Do not treat corrupt files as zero rows.
+            result.datasets[dataset] = []
+            result.counts[dataset] = -1
             continue
+
         if len(rows) > max_batch:
             result.issues.append(
                 ValidationIssue(
@@ -171,6 +246,7 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
                     dataset=dataset,
                 )
             )
+
         valid_rows: list[dict[str, Any]] = []
         for idx, row in enumerate(rows):
             for key in ENVELOPE_REQUIRED:
@@ -199,6 +275,17 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
                         "error",
                         "dataset_field_mismatch",
                         f"{dataset} row {idx}: dataset field {row.get('dataset')!r}",
+                        dataset=dataset,
+                    )
+                )
+                continue
+            fp = row.get("content_fingerprint")
+            if not isinstance(fp, str) or not FINGERPRINT_RE.match(fp):
+                result.issues.append(
+                    ValidationIssue(
+                        "error",
+                        "invalid_content_fingerprint",
+                        f"{dataset} row {idx}: content_fingerprint {fp!r} is empty or malformed",
                         dataset=dataset,
                     )
                 )
@@ -238,6 +325,18 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
             valid_rows.append(row)
         result.datasets[dataset] = valid_rows
         result.counts[dataset] = len(valid_rows)
+
+        if declared_count is not None and declared_count != len(rows):
+            # Compare against on-disk row count (before envelope filtering) so a
+            # corrupt/partial file cannot be silently accepted as a shorter batch.
+            result.issues.append(
+                ValidationIssue(
+                    "error",
+                    "manifest_count_mismatch",
+                    f"manifest row_count={declared_count} for {dataset} but {dataset}.jsonl has {len(rows)} rows",
+                    dataset=dataset,
+                )
+            )
 
     # Soft join checks: proposal → investigation; feedback → target.
     inv_ids = {r.get("investigation_id") for r in result.datasets.get("investigations", [])}

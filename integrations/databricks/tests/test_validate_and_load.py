@@ -53,7 +53,7 @@ def test_missing_checkpoint(tmp_path: Path):
     assert any(i.code == "missing_checkpoint" for i in res.errors())
 
 
-def test_malformed_jsonl(tmp_path: Path):
+def _write_sidecars(tmp_path: Path, *, datasets: list[dict]) -> None:
     (tmp_path / "checkpoint.json").write_text(
         json.dumps(
             {
@@ -69,15 +69,114 @@ def test_malformed_jsonl(tmp_path: Path):
             {
                 "schema_version": "pulse.export.manifest.v1",
                 "export_schema_version": "pulse.export.analytics.v1",
+                "datasets": datasets,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_malformed_jsonl(tmp_path: Path):
+    _write_sidecars(tmp_path, datasets=[])
+    (tmp_path / "incidents.jsonl").write_text("{not-json\n", encoding="utf-8")
+    res = validate_export_dir(tmp_path)
+    assert not res.ok
+    assert any(i.code == "malformed_jsonl" for i in res.errors())
+    # Corrupt file must not be silently converted to zero rows.
+    assert res.counts.get("incidents") == -1
+
+
+def test_missing_dataset_file_when_manifest_expects_rows(tmp_path: Path):
+    _write_sidecars(
+        tmp_path,
+        datasets=[
+            {"name": "incidents", "row_count": 0, "file": "incidents.jsonl"},
+            {"name": "eval_case_results", "row_count": 15, "file": "eval_case_results.jsonl"},
+        ],
+    )
+    # Intentionally empty incidents (row_count=0, no file) is OK.
+    # Missing eval_case_results with declared rows must fail.
+    res = validate_export_dir(tmp_path)
+    assert not res.ok
+    assert any(i.code == "missing_dataset_file" and i.dataset == "eval_case_results" for i in res.errors())
+    assert res.counts.get("incidents") == 0
+    assert res.counts.get("eval_case_results") == 0
+
+
+def test_intentionally_empty_dataset_ok(tmp_path: Path):
+    _write_sidecars(
+        tmp_path,
+        datasets=[{"name": "proposals", "row_count": 0, "file": "proposals.jsonl"}],
+    )
+    res = validate_export_dir(tmp_path)
+    assert res.ok, [i.message for i in res.errors()]
+    assert res.counts.get("proposals") == 0
+
+
+def test_manifest_count_mismatch(tmp_path: Path):
+    _write_sidecars(
+        tmp_path,
+        datasets=[{"name": "incidents", "row_count": 2, "file": "incidents.jsonl"}],
+    )
+    row = {
+        "export_schema_version": "pulse.export.analytics.v1",
+        "dataset": "incidents",
+        "dedupe_key": "inc-1",
+        "content_fingerprint": "ab" * 32,
+        "source_schema_version": "pulse.incident.v1",
+        "provenance_class": "synthetic_fixture",
+        "exported_at": "2026-10-13T00:00:00Z",
+    }
+    (tmp_path / "incidents.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    res = validate_export_dir(tmp_path)
+    assert not res.ok
+    assert any(i.code == "manifest_count_mismatch" for i in res.errors())
+
+
+def test_invalid_content_fingerprint_rejected(tmp_path: Path):
+    _write_sidecars(
+        tmp_path,
+        datasets=[{"name": "incidents", "row_count": 1, "file": "incidents.jsonl"}],
+    )
+    row = {
+        "export_schema_version": "pulse.export.analytics.v1",
+        "dataset": "incidents",
+        "dedupe_key": "inc-1",
+        "content_fingerprint": "",
+        "source_schema_version": "pulse.incident.v1",
+        "provenance_class": "synthetic_fixture",
+        "exported_at": "2026-10-13T00:00:00Z",
+    }
+    (tmp_path / "incidents.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    res = validate_export_dir(tmp_path)
+    assert not res.ok
+    assert any(i.code == "invalid_content_fingerprint" for i in res.errors())
+
+
+def test_schema_version_mismatch_checkpoint_manifest(tmp_path: Path):
+    (tmp_path / "checkpoint.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "pulse.export.checkpoint.v1",
+                "export_schema_version": "pulse.export.analytics.v0",
+                "datasets": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "export-manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "pulse.export.manifest.v1",
+                "export_schema_version": "pulse.export.analytics.v1",
                 "datasets": [],
             }
         ),
         encoding="utf-8",
     )
-    (tmp_path / "incidents.jsonl").write_text("{not-json\n", encoding="utf-8")
     res = validate_export_dir(tmp_path)
     assert not res.ok
-    assert any(i.code == "malformed_jsonl" for i in res.errors())
+    assert any(i.code == "schema_version_mismatch" for i in res.errors())
 
 
 def test_dry_run_plan_and_idempotent_fake_load():

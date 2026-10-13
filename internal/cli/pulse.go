@@ -43,9 +43,8 @@ func newPulseCmd() *cobra.Command {
 }
 
 func pulseDataDir(cmd *cobra.Command) (string, error) {
-	if v := strings.TrimSpace(os.Getenv("PERCH_PULSE_DIR")); v != "" {
-		return v, nil
-	}
+	// Explicit --pulse-dir wins over PERCH_PULSE_DIR so operators can isolate
+	// demo/fixture exports from ambient real stores.
 	flag := ""
 	if cmd != nil {
 		f, err := cmd.Flags().GetString("pulse-dir")
@@ -61,6 +60,9 @@ func pulseDataDir(cmd *cobra.Command) (string, error) {
 	}
 	if flag != "" {
 		return flag, nil
+	}
+	if v := strings.TrimSpace(os.Getenv("PERCH_PULSE_DIR")); v != "" {
+		return v, nil
 	}
 	wd, err := os.Getwd()
 	if err != nil {

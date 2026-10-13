@@ -122,6 +122,16 @@ func Run(opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("export: list proposals: %w", err)
 	}
+	// Provenance must reflect the verified source. Refusing synthetic labels on a
+	// non-empty pulse-dir prevents demo/export paths from mislabeling real
+	// ~/.perch (or any persisted) incident/investigation records.
+	if prov == ProvenanceSyntheticFixture &&
+		(len(incidents) > 0 || len(invs) > 0 || len(invFB) > 0 || len(props) > 0) {
+		return Result{}, fmt.Errorf(
+			"export: refusing incident-provenance=%s with non-empty pulse-dir %q (%d incidents, %d investigations, %d feedback, %d proposals); use observed_local or historical_demo, or export from an empty/fixture-only --pulse-dir",
+			prov, opts.PulseDir, len(incidents), len(invs), len(invFB), len(props),
+		)
+	}
 	propFB, err := propStore.ListAllFeedback()
 	if err != nil {
 		return Result{}, fmt.Errorf("export: list proposal feedback: %w", err)

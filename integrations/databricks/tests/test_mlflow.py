@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
 
-from perch_pulse_dbx.mlflow_eval import FakeMLflowClient, log_eval_report, redact_mapping
+from perch_pulse_dbx.mlflow_eval import (
+    FakeMLflowClient,
+    classify_mlflow_error,
+    log_eval_report,
+    redact_mapping,
+    sanitize_error_message,
+)
 
 REPO = Path(__file__).resolve().parents[3]
 SAMPLE_REPORT = REPO / "examples" / "pulse-export" / "sample" / "eval-report.json"
@@ -36,3 +42,57 @@ def test_missing_aggregate_does_not_fabricate():
     assert res.ok  # logging still succeeds
     assert res.metrics == {}
     assert any("aggregate missing" in p for p in res.problems)
+
+
+class _BoomClient:
+    def __init__(self, exc: BaseException):
+        self.exc = exc
+
+    def log_run(self, payload):
+        raise self.exc
+
+
+def test_live_log_failure_is_structured_not_success():
+    report = json.loads(SAMPLE_REPORT.read_text(encoding="utf-8"))
+    res = log_eval_report(
+        report,
+        client=_BoomClient(TimeoutError("mlflow tracking timed out after 30s")),
+        live=True,
+    )
+    assert not res.ok
+    assert res.live_executed is False
+    assert res.run_id is None
+    assert res.error_category == "timeout"
+    assert any("timed out" in p.lower() or "timeout" in p.lower() for p in res.problems)
+
+
+def test_auth_failure_category_and_secret_redaction():
+    report = {"aggregate": {"case_count": 1, "deterministic_pass_count": 1, "deterministic_denominator": 1}}
+    secret = "sk-abcdefghijklmnopqrstuvwxyz012345"
+    res = log_eval_report(
+        report,
+        client=_BoomClient(PermissionError(f"Unauthorized token={secret}")),
+        live=True,
+    )
+    assert not res.ok
+    assert res.live_executed is False
+    assert res.error_category == "auth_rejected"
+    blob = " ".join(res.problems)
+    assert secret not in blob
+    assert "[redacted]" in blob or "auth" in (res.error_category or "")
+
+
+def test_sanitize_and_classify_helpers():
+    assert "sk-" not in sanitize_error_message("Authorization: Bearer sk-abcdefghijklmnop")
+    assert classify_mlflow_error(ConnectionError("connection refused")) == "connection_failed"
+    assert classify_mlflow_error(ImportError("mlflow")) == "mlflow_unavailable"
+
+
+def test_empty_run_id_not_success():
+    class EmptyID:
+        def log_run(self, payload):
+            return ""
+
+    res = log_eval_report({"aggregate": {}}, client=EmptyID(), live=False)
+    assert not res.ok
+    assert res.error_category == "empty_run_id"

@@ -7,17 +7,21 @@ Modes (never silently mixed):
 
 | Mode | What it uses | Label in artifacts |
 |------|----------------|--------------------|
-| **MOCK** (default) | Synthetic fixtures, offline eval/export | `synthetic_fixture` |
-| **REPLAY** | Labeled historical sample export + UI fixtures | `historical_demo` |
+| **MOCK** (default) | Synthetic fixtures, offline eval/export from an **isolated empty** `--pulse-dir` under `--out-dir` | `synthetic_fixture` |
+| **REPLAY** | Labeled historical sample export + UI fixtures (not ambient `~/.perch`) | sample / `historical_demo` |
 | **LIVE** | Real Astronomy Shop telemetry + real fault | observed local / live collector |
 
 Orchestrator: [`scripts/demo/pulse-demo.sh`](../scripts/demo/pulse-demo.sh)
+
+**Provenance rule:** mock/replay never export ambient `PERCH_PULSE_DIR` / `~/.perch` records as synthetic. To export real persisted Pulse data, pass `--use-real-pulse-dir DIR` with `--mode live` (labels `observed_local`). The export CLI also refuses `synthetic_fixture` when the pulse-dir is non-empty.
 
 ```bash
 ./scripts/demo/pulse-demo.sh --mode mock --phase all
 ./scripts/demo/pulse-demo.sh --mode mock --phase offline
 ./scripts/demo/pulse-demo.sh --mode replay --phase offline
 ./scripts/demo/pulse-demo.sh --mode live --phase all   # heavy; disk hard-stop <15 GiB
+# Explicit real-data export (after live detection wrote incidents):
+./scripts/demo/pulse-demo.sh --mode live --phase offline --use-real-pulse-dir "$HOME/.perch/pulse"
 ```
 
 ---
