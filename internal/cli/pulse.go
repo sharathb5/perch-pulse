@@ -36,6 +36,7 @@ func newPulseCmd() *cobra.Command {
 	cmd.AddCommand(newPulseInvestigationContextCmd())
 	cmd.AddCommand(newPulseLLMStatusCmd())
 	cmd.AddCommand(newPulseLLMProposeCmd())
+	cmd.AddCommand(newPulseLLMProviderSmokeCmd())
 	cmd.AddCommand(newPulseInvestigationEvalCmd())
 	cmd.AddCommand(newPulseExportAnalyticsCmd())
 	return cmd
@@ -427,6 +428,22 @@ func newPulseLLMProposeCmd() *cobra.Command {
 	return cmd
 }
 
+func newPulseLLMProviderSmokeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "llm-provider-smoke",
+		Short: "Provider compatibility smoke for F2a (default offline; real mode requires explicit auth flags)",
+		Args:  cobra.NoArgs,
+		RunE:  runPulseLLMProviderSmoke,
+	}
+	cmd.Flags().String("case-id", "case_payment_error", "F2c corpus case id to load as evidence snapshot")
+	cmd.Flags().String("expected-fingerprint", "", "Reject if evidence fingerprint differs")
+	cmd.Flags().Bool("real-provider", false, "Contact the configured OpenAI-compatible provider (off by default)")
+	cmd.Flags().Bool("i-authorize-provider-calls", false, "Required with --real-provider; acknowledges billable calls")
+	cmd.Flags().Bool("persist", false, "Persist a valid proposal under --pulse-dir (real mode only)")
+	cmd.Flags().Bool("json", false, "Print smoke result JSON")
+	return cmd
+}
+
 func newPulseInvestigationEvalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "investigation-eval",
@@ -436,6 +453,8 @@ func newPulseInvestigationEvalCmd() *cobra.Command {
 	}
 	cmd.Flags().String("out-dir", "", "Write report.json and report.md under this directory")
 	cmd.Flags().Bool("json", false, "Print report JSON to stdout (default: markdown summary)")
+	cmd.Flags().String("dataset", "f2c", "Dataset id: f2c (default) | f2b | full builtin id")
+	cmd.Flags().String("reviews-dir", "", "Optional directory of human review JSON files (never fabricated)")
 	return cmd
 }
 
@@ -512,11 +531,17 @@ func runPulseExportAnalytics(cmd *cobra.Command, _ []string) error {
 }
 
 func runPulseInvestigationEval(cmd *cobra.Command, _ []string) error {
-	ds, err := eval.BuiltinDataset()
+	dsID, _ := cmd.Flags().GetString("dataset")
+	ds, err := eval.DatasetByID(dsID)
 	if err != nil {
 		return err
 	}
-	rep, err := eval.Run(eval.RunOptions{Dataset: ds})
+	reviewsDir, _ := cmd.Flags().GetString("reviews-dir")
+	reviews, err := eval.LoadReviewsDir(reviewsDir)
+	if err != nil {
+		return err
+	}
+	rep, err := eval.Run(eval.RunOptions{Dataset: ds, HumanReviews: reviews})
 	if err != nil {
 		return err
 	}
@@ -545,6 +570,75 @@ func runPulseInvestigationEval(cmd *cobra.Command, _ []string) error {
 	}
 	_, err = fmt.Fprint(cmd.OutOrStdout(), rep.Markdown())
 	return err
+}
+
+func runPulseLLMProviderSmoke(cmd *cobra.Command, _ []string) error {
+	caseID, _ := cmd.Flags().GetString("case-id")
+	fp, _ := cmd.Flags().GetString("expected-fingerprint")
+	real, _ := cmd.Flags().GetBool("real-provider")
+	auth, _ := cmd.Flags().GetBool("i-authorize-provider-calls")
+	persist, _ := cmd.Flags().GetBool("persist")
+	asJSON, _ := cmd.Flags().GetBool("json")
+
+	ds, err := eval.F2cCorpus()
+	if err != nil {
+		return err
+	}
+	var inv investigation.Investigation
+	found := false
+	for _, c := range ds.Cases {
+		if c.CaseID == caseID {
+			inv = c.Generation.Investigation
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("unknown F2c case-id %q", caseID)
+	}
+
+	opts := pulsellm.SmokeOptions{
+		Mode:                pulsellm.SmokeModeOffline,
+		Investigation:       inv,
+		CaseID:              caseID,
+		ExpectedFingerprint: strings.TrimSpace(fp),
+		Persist:             false,
+	}
+	if real {
+		opts.Mode = pulsellm.SmokeModeReal
+		opts.AuthorizePaidCalls = auth
+		cfg, err := pulsellm.ConfigFromEnv()
+		if err != nil {
+			return err
+		}
+		opts.Config = cfg
+		if persist {
+			dir, err := pulseDataDir(cmd)
+			if err != nil {
+				return err
+			}
+			opts.Store = pulsellm.NewFileStore(dir)
+			opts.Persist = true
+		}
+	}
+
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	res, err := pulsellm.RunProviderSmoke(ctx, opts)
+	if asJSON || err == nil {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(res)
+	}
+	if err != nil {
+		return err
+	}
+	if !res.CompatibilityOK {
+		return fmt.Errorf("llm provider smoke: compatibility failure")
+	}
+	return nil
 }
 
 func runPulseLLMPropose(cmd *cobra.Command, args []string) error {

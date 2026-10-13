@@ -23,5 +23,7 @@ func DefaultLimitations() []string {
 		"Hidden scenario ground truth is never passed into generation inputs.",
 		"Small fixture datasets do not support statistical significance claims.",
 		"Human feedback is optional and subjective; absence is labeled unavailable, not failure.",
+		"Mechanical citation checks ≠ semantic entailment; phrase heuristics are not reliable NLP.",
+		"Human rubric dimensions without attached reviews are NOT EVALUATED.",
 	}
 }

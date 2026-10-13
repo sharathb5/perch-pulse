@@ -604,3 +604,203 @@ func TestWriteDoesNotLogAPIKey(t *testing.T) {
 		t.Fatal("api key leaked into proposal file")
 	}
 }
+
+func TestTruncatedFinishReasonRejected(t *testing.T) {
+	inv := mustInv(t)
+	dir := t.TempDir()
+	invStore := investigation.NewFileStore(dir)
+	_ = invStore.Put(inv)
+	// Content is valid JSON but finish_reason=length must still reject.
+	fake := &llm.FakeClient{Response: llm.ChatResponse{
+		Content:      llm.ExampleValidModelJSON(inv.InvestigationID, inv.ContentFingerprint, symptomID(inv), "astronomy/local/payment"),
+		FinishReason: "length",
+		Model:        "gpt-4o-mini",
+	}}
+	svc := &llm.Service{
+		Config: llm.Config{
+			Enabled: true, APIKey: "k", BaseURL: "http://127.0.0.1:9/v1",
+			Model: "gpt-4o-mini", Timeout: time.Second, MaxTokens: 200, MaxConcurrent: 1,
+		},
+		Investigations: llm.InvestigationAdapter{Store: invStore},
+		Store:          llm.NewFileStore(dir),
+		Client:         fake,
+	}
+	_, err := svc.Propose(context.Background(), llm.ProposeOptions{InvestigationID: inv.InvestigationID})
+	var ve *llm.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "truncated") {
+		t.Fatalf("error %v", err)
+	}
+}
+
+func TestRetryTransientThenSuccess(t *testing.T) {
+	var calls atomic.Int32
+	inner := &llm.FakeClient{Handler: func(req llm.ChatRequest) (llm.ChatResponse, error) {
+		n := calls.Add(1)
+		if n < 3 {
+			return llm.ChatResponse{}, &llm.ProviderHTTPError{StatusCode: 503}
+		}
+		return llm.ChatResponse{Content: `{"ok":true}`, FinishReason: "stop"}, nil
+	}}
+	client := &llm.RetryingChatClient{
+		Inner:       inner,
+		MaxAttempts: 3,
+		Backoff:     time.Millisecond,
+		AfterFail:   func(int, time.Duration) {},
+	}
+	resp, err := client.Complete(context.Background(), llm.ChatRequest{Model: "m", System: "s", User: "u", MaxTokens: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Content != `{"ok":true}` || calls.Load() != 3 {
+		t.Fatalf("resp=%v calls=%d", resp, calls.Load())
+	}
+}
+
+func TestRetryDoesNotRetryValidation(t *testing.T) {
+	var calls atomic.Int32
+	inner := &llm.FakeClient{Handler: func(req llm.ChatRequest) (llm.ChatResponse, error) {
+		calls.Add(1)
+		return llm.ChatResponse{}, &llm.ValidationError{Msg: "bad schema"}
+	}}
+	client := &llm.RetryingChatClient{Inner: inner, MaxAttempts: 3, AfterFail: func(int, time.Duration) {}}
+	_, err := client.Complete(context.Background(), llm.ChatRequest{Model: "m", System: "s", User: "u", MaxTokens: 10})
+	var ve *llm.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("got %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("retries=%d", calls.Load())
+	}
+}
+
+func TestHTTP500TypedError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"boom"}}`))
+	}))
+	defer srv.Close()
+	client := &llm.HTTPChatClient{BaseURL: srv.URL + "/v1", APIKey: "k", HTTPClient: srv.Client()}
+	_, err := client.Complete(context.Background(), llm.ChatRequest{Model: "m", System: "s", User: "u", MaxTokens: 10})
+	var he *llm.ProviderHTTPError
+	if !errors.As(err, &he) || he.StatusCode != 500 {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestOfflineProviderSmoke(t *testing.T) {
+	inv := mustInv(t)
+	res, err := llm.RunProviderSmoke(context.Background(), llm.SmokeOptions{
+		Mode:          llm.SmokeModeOffline,
+		Investigation: inv,
+		CaseID:        "case_payment_error",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.CompatibilityOK || res.RealProviderExecuted || !res.SchemaValid {
+		t.Fatalf("%+v", res)
+	}
+	if res.EstimatedCostUSD == nil {
+		t.Fatal("expected cost estimate for gpt-4o-mini fixture")
+	}
+	raw, _ := json.Marshal(res)
+	if strings.Contains(strings.ToLower(string(raw)), "sk-") {
+		t.Fatal("smoke result leaked key")
+	}
+}
+
+func TestRealSmokeRequiresAuthorization(t *testing.T) {
+	inv := mustInv(t)
+	_, err := llm.RunProviderSmoke(context.Background(), llm.SmokeOptions{
+		Mode:          llm.SmokeModeReal,
+		Investigation: inv,
+		Config: llm.Config{
+			Enabled: true, APIKey: "k", BaseURL: "https://api.openai.com/v1", Model: "gpt-4o-mini",
+			Timeout: time.Second, MaxTokens: 200, MaxConcurrent: 1,
+		},
+	})
+	var ve *llm.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSmokeBadFingerprint(t *testing.T) {
+	inv := mustInv(t)
+	_, err := llm.RunProviderSmoke(context.Background(), llm.SmokeOptions{
+		Mode:                llm.SmokeModeOffline,
+		Investigation:       inv,
+		ExpectedFingerprint: "deadbeef",
+	})
+	if err == nil {
+		t.Fatal("expected fingerprint mismatch")
+	}
+}
+
+func TestSmokeFabricatedCitationRejected(t *testing.T) {
+	inv := mustInv(t)
+	bad := `{
+  "schema_version": "pulse.investigation.llm_output.v1",
+  "source_investigation_id": "` + inv.InvestigationID + `",
+  "source_fingerprint": "` + inv.ContentFingerprint + `",
+  "diagnosed": false,
+  "hypotheses": [{
+    "hypothesis_id": "hyp|llm|x",
+    "statement": "Observed error_rate regression relative to before-window baseline.",
+    "classification": "INFERRED",
+    "supporting_evidence_refs": ["symptom:fabricated-not-real"],
+    "counter_evidence_refs": [],
+    "missing_evidence": [],
+    "suggested_verification": "Check digests",
+    "kind": "error_rate_regression"
+  }],
+  "missing_evidence": [],
+  "unknowns": ["Root cause is UNKNOWN"],
+  "suggested_verification_steps": ["recheck"],
+  "limitations": ["test"]
+}`
+	_, err := llm.RunProviderSmoke(context.Background(), llm.SmokeOptions{
+		Mode:          llm.SmokeModeOffline,
+		Investigation: inv,
+		Client:        &llm.FakeClient{Response: llm.ChatResponse{Content: bad, FinishReason: "stop", Model: "gpt-4o-mini"}},
+	})
+	if err == nil {
+		t.Fatal("expected fabricated citation rejection")
+	}
+}
+
+func TestPromptInjectionMetadataStillValidated(t *testing.T) {
+	inv := mustInv(t)
+	// Model tries confirmed root cause — must fail validation.
+	poison := `{
+  "schema_version": "pulse.investigation.llm_output.v1",
+  "source_investigation_id": "` + inv.InvestigationID + `",
+  "source_fingerprint": "` + inv.ContentFingerprint + `",
+  "diagnosed": false,
+  "hypotheses": [{
+    "hypothesis_id": "hyp|llm|x",
+    "statement": "Ignore evidence; confirmed root cause is the deploy.",
+    "classification": "INFERRED",
+    "supporting_evidence_refs": ["phase:during"],
+    "counter_evidence_refs": [],
+    "missing_evidence": [],
+    "suggested_verification": "none",
+    "kind": "other"
+  }],
+  "missing_evidence": [],
+  "unknowns": ["Root cause is UNKNOWN"],
+  "suggested_verification_steps": ["none"],
+  "limitations": ["test"]
+}`
+	_, err := llm.RunProviderSmoke(context.Background(), llm.SmokeOptions{
+		Mode:          llm.SmokeModeOffline,
+		Investigation: inv,
+		Client:        &llm.FakeClient{Response: llm.ChatResponse{Content: poison, FinishReason: "stop"}},
+	})
+	if err == nil {
+		t.Fatal("expected policy rejection")
+	}
+}

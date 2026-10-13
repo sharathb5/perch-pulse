@@ -28,6 +28,44 @@ Rules:
 
 ---
 
+## ADR-028: Real LLM provider validation (Milestone F2c)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F2a ships an OpenAI-compatible proposer validated only with
+`FakeClient` / `httptest`. F2b scores stored proposals offline. Operators need a
+reproducible compatibility smoke and a fixed evaluation corpus without implying
+live model quality from mocks, without paid calls in CI, and without relaxing
+citation or causation policy for model mistakes.
+
+**Decision:**
+1. Document a single compatible configuration: provider `openai_compatible`,
+   model `gpt-4o-mini`, `POST {base}/chat/completions` with
+   `response_format=json_object`.
+2. Add `perch pulse llm-provider-smoke` defaulting to **offline** fixture
+   validation; real calls require `--real-provider` **and**
+   `--i-authorize-provider-calls` plus server-side `PERCH_PULSE_LLM_*` env.
+3. Reject `finish_reason=length` / `max_tokens` as truncated incomplete output;
+   wrap HTTP client with bounded retries for 429/5xx only (never schema failures).
+4. Ship fixed F2c corpus (`pulse.investigation.eval.f2c_provider_corpus.v1`,
+   9 synthetic Astronomy Shop fixtures). Reuse F2b `eval.Run` for F1 vs LLM
+   comparison with explicit denominators; provenance class
+   `synthetic_evaluation_fixture` (not production).
+5. Attach optional human reviews (`pulse.investigation.human_review.v1`, rubric
+   `pulse.investigation.rubric.f2c.v1`); absent reviews → `not_evaluated`.
+6. Cost estimates only for the documented model using public list prices dated
+   in code; otherwise mark unavailable. Never fabricate latency/tokens/cost.
+
+**Consequences:** CI remains credential-free. Real provider validation is
+honestly reported as NOT RUN unless authorized calls execute. Semantic
+entailment remains a human/rubric concern, not a mechanical pass.
+
+**Alternatives considered:** Auto-calling providers in eval (rejected: cost);
+multi-vendor adapters in F2c (rejected: scope); relaxing citation policy for
+model errors (rejected: evidence integrity); inventing human reviews (rejected).
+
 ## ADR-027: Databricks-ready investigation data pipeline (Milestone F3a)
 
 **Date:** 2026-10-12  

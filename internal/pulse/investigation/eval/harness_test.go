@@ -302,3 +302,117 @@ func TestReportWriteRedacted(t *testing.T) {
 		t.Fatal("secrets in report")
 	}
 }
+
+func TestF2cCorpusOfflineRun(t *testing.T) {
+	ds, err := eval.F2cCorpus()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ds.Cases) < 5 || len(ds.Cases) > 10 {
+		t.Fatalf("F2c corpus size %d want 5..10", len(ds.Cases))
+	}
+	rep, err := eval.Run(eval.RunOptions{
+		Dataset: ds,
+		Now:     func() time.Time { return time.Date(2026, 10, 12, 18, 0, 0, 0, time.UTC) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.DatasetID != eval.F2cCorpusDatasetID {
+		t.Fatalf("dataset %s", rep.DatasetID)
+	}
+	if rep.ReviewSummary == nil || rep.ReviewSummary.Count != 0 {
+		t.Fatal("expected empty review summary marked not evaluated")
+	}
+	if !strings.Contains(rep.ReviewSummary.NotEvaluatedNote, "NOT EVALUATED") {
+		t.Fatalf("note %q", rep.ReviewSummary.NotEvaluatedNote)
+	}
+	if len(rep.CorpusMeta) != len(ds.Cases) {
+		t.Fatal("corpus meta missing")
+	}
+	for _, m := range rep.CorpusMeta {
+		if m.ProvenanceClass != "synthetic_evaluation_fixture" {
+			t.Fatalf("provenance %s", m.ProvenanceClass)
+		}
+	}
+	// Annotations must not leak into generation-only view.
+	for _, c := range ds.Cases {
+		if err := eval.AssertNoAnnotationLeakage(c); err != nil {
+			t.Fatal(err)
+		}
+		genRaw, _ := json.Marshal(c.GenerationOnly())
+		if strings.Contains(string(genRaw), "gt:never-to-model") || strings.Contains(string(genRaw), "hidden_ground_truth") {
+			t.Fatalf("leakage in %s", c.CaseID)
+		}
+	}
+}
+
+func TestHumanReviewAttachment(t *testing.T) {
+	ds, err := eval.F2cCorpus()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var propID, fp string
+	for _, c := range ds.Cases {
+		if len(c.Generation.StoredProposals) > 0 {
+			propID = c.Generation.StoredProposals[0].Proposal.ProposalID
+			fp = c.Generation.Investigation.ContentFingerprint
+			break
+		}
+	}
+	if propID == "" {
+		t.Fatal("need a synthetic proposal")
+	}
+	review := eval.HumanReview{
+		SchemaVersion:           eval.ReviewSchemaVersion,
+		ReviewID:                "review|test|1",
+		ProposalID:              propID,
+		SourceFingerprint:       fp,
+		EvaluatorProvenance:     "test-harness",
+		Timestamp:               time.Date(2026, 10, 12, 19, 0, 0, 0, time.UTC),
+		RubricVersion:           eval.RubricVersion,
+		ObservedFactsAccurate:   eval.ReviewYes,
+		ReferencesSupportClaims: eval.ReviewPartial,
+		DistinguishesHypotheses: eval.ReviewYes,
+		AcknowledgesUnknowns:    eval.ReviewYes,
+		VerificationActionable:  eval.ReviewYes,
+		MoreUsefulThanF1:        eval.ReviewNotEvaluated,
+		Limitations:             eval.ReviewLimitations(),
+	}
+	if err := review.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	raw, _ := json.MarshalIndent(review, "", "  ")
+	if err := os.WriteFile(filepath.Join(dir, "review.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := eval.LoadReviewsDir(dir)
+	if err != nil || len(loaded) != 1 {
+		t.Fatalf("load %v %v", loaded, err)
+	}
+	rep, err := eval.Run(eval.RunOptions{Dataset: ds, HumanReviews: loaded})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.ReviewSummary.Count != 1 {
+		t.Fatalf("count %d", rep.ReviewSummary.Count)
+	}
+	if rep.ReviewSummary.DimensionCounts["more_useful_than_deterministic_f1"]["not_evaluated"] != 1 {
+		t.Fatalf("dims %+v", rep.ReviewSummary.DimensionCounts)
+	}
+}
+
+func TestDatasetByID(t *testing.T) {
+	ds, err := eval.DatasetByID("f2c")
+	if err != nil || ds.DatasetID != eval.F2cCorpusDatasetID {
+		t.Fatalf("%v %s", err, ds.DatasetID)
+	}
+	ds, err = eval.DatasetByID("f2b")
+	if err != nil || ds.DatasetID != eval.BuiltinDatasetID {
+		t.Fatalf("%v %s", err, ds.DatasetID)
+	}
+	if _, err := eval.DatasetByID("nope"); err == nil {
+		t.Fatal("expected unknown dataset error")
+	}
+}

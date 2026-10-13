@@ -66,6 +66,9 @@ type Report struct {
 	Cases         []CaseResult     `json:"cases"`
 	Aggregate     AggregateMetrics `json:"aggregate"`
 	HumanRubric   []string         `json:"human_rubric"`
+	RubricVersion string           `json:"rubric_version,omitempty"`
+	ReviewSummary *ReviewSummary   `json:"human_review_summary,omitempty"`
+	CorpusMeta    []F2cCaseMeta    `json:"corpus_meta,omitempty"`
 	Limitations   []string         `json:"limitations"`
 }
 

@@ -151,6 +151,10 @@ func (s *Service) Propose(ctx context.Context, opts ProposeOptions) (Proposal, e
 		}
 		return Proposal{}, err
 	}
+	// Truncated completions are untrusted incomplete JSON even if a parser recovers.
+	if isTruncatedFinish(resp.FinishReason) {
+		return Proposal{}, &ValidationError{Msg: "provider truncated output (finish_reason=length); incomplete response rejected"}
+	}
 
 	prop, err := ParseAndValidateModelOutput(resp.Content, inv, payload)
 	if err != nil {
@@ -285,9 +289,10 @@ func (s *Service) ListFeedback(proposalID string) ([]Feedback, error) {
 	return s.Store.ListFeedback(proposalID)
 }
 
-// NewHTTPClientFromConfig builds the default OpenAI-compatible HTTP client.
-func NewHTTPClientFromConfig(cfg Config) *HTTPChatClient {
-	return &HTTPChatClient{
+// NewHTTPClientFromConfig builds the default OpenAI-compatible HTTP client
+// wrapped with bounded retries for transient 429/5xx failures only.
+func NewHTTPClientFromConfig(cfg Config) ChatClient {
+	inner := &HTTPChatClient{
 		BaseURL: cfg.BaseURL,
 		APIKey:  cfg.APIKey,
 		HTTPClient: &http.Client{
@@ -297,6 +302,16 @@ func NewHTTPClientFromConfig(cfg Config) *HTTPChatClient {
 				return http.ErrUseLastResponse
 			},
 		},
+	}
+	return &RetryingChatClient{Inner: inner, MaxAttempts: defaultRetryAttempts, Backoff: defaultRetryBackoff}
+}
+
+func isTruncatedFinish(reason string) bool {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "length", "max_tokens":
+		return true
+	default:
+		return false
 	}
 }
 

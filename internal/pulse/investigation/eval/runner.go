@@ -21,6 +21,8 @@ type RunOptions struct {
 	Now      func() time.Time
 	// RequireLLM when true fails cases that lack stored proposals (default false).
 	RequireLLM bool
+	// HumanReviews optionally attach rubric results (never fabricated).
+	HumanReviews []HumanReview
 }
 
 // Run executes a fully offline evaluation: no provider calls.
@@ -105,6 +107,13 @@ func Run(opts RunOptions) (Report, error) {
 		})
 	}
 
+	lim := DefaultLimitations()
+	if opts.Dataset.DatasetID == F2cCorpusDatasetID {
+		lim = append(lim,
+			"F2c corpus cases are synthetic evaluation fixtures — not observed production incidents.",
+			"Real provider proposals are scored only when stored with origin=recorded_offline.",
+		)
+	}
 	rep := Report{
 		SchemaVersion: ReportSchemaVersion,
 		GeneratedAt:   now,
@@ -112,8 +121,13 @@ func Run(opts RunOptions) (Report, error) {
 		Mode:          "offline",
 		Cases:         results,
 		Aggregate:     BuildAggregate(results),
-		HumanRubric:   HumanRubric(),
-		Limitations:   DefaultLimitations(),
+		HumanRubric:   append(HumanRubric(), RubricQuestions()...),
+		RubricVersion: RubricVersion,
+		ReviewSummary: SummarizeHumanReviews(opts.HumanReviews),
+		Limitations:   lim,
+	}
+	if opts.Dataset.DatasetID == F2cCorpusDatasetID {
+		rep.CorpusMeta = F2cCorpusMeta(opts.Dataset)
 	}
 	return rep, nil
 }
