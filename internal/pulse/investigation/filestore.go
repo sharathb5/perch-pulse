@@ -150,6 +150,49 @@ func (s *FileStore) LatestForIncident(incidentID string) (Investigation, bool, e
 	return list[0], true, nil
 }
 
+// ListAll returns all investigations (newest first). Used by analytical export.
+func (s *FileStore) ListAll() ([]Investigation, error) {
+	return s.listAllLocked(false)
+}
+
+// ListAllFeedback returns all feedback rows (oldest first). Used by analytical export.
+func (s *FileStore) ListAllFeedback() ([]Feedback, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := os.ReadDir(s.feedbackDir())
+	if os.IsNotExist(err) {
+		return []Feedback{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []Feedback
+	for _, ent := range entries {
+		if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".json") {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(s.feedbackDir(), ent.Name()))
+		if err != nil {
+			return nil, err
+		}
+		var fb Feedback
+		if err := json.Unmarshal(raw, &fb); err != nil {
+			return nil, fmt.Errorf("investigation: corrupt feedback file %s: %w", ent.Name(), err)
+		}
+		out = append(out, fb)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if !out[i].Timestamp.Equal(out[j].Timestamp) {
+			return out[i].Timestamp.Before(out[j].Timestamp)
+		}
+		return out[i].FeedbackID < out[j].FeedbackID
+	})
+	if out == nil {
+		out = []Feedback{}
+	}
+	return out, nil
+}
+
 func (s *FileStore) listAllLocked(alreadyLocked bool) ([]Investigation, error) {
 	if !alreadyLocked {
 		s.mu.Lock()

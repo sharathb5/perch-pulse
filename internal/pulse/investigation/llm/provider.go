@@ -184,13 +184,13 @@ func (c *HTTPChatClient) Complete(ctx context.Context, req ChatRequest) (ChatRes
 	var parsed chatAPIResponse
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return ChatResponse{}, fmt.Errorf("llm: provider HTTP %d", resp.StatusCode)
+			return ChatResponse{}, &ProviderHTTPError{StatusCode: resp.StatusCode}
 		}
 		return ChatResponse{}, &ValidationError{Msg: "provider returned malformed JSON"}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		// Never echo provider error bodies — they may contain echoed credentials.
-		return ChatResponse{}, fmt.Errorf("llm: provider HTTP %d", resp.StatusCode)
+		return ChatResponse{}, &ProviderHTTPError{StatusCode: resp.StatusCode}
 	}
 	if parsed.Error != nil && parsed.Error.Message != "" {
 		return ChatResponse{}, fmt.Errorf("llm: provider rejected request")
