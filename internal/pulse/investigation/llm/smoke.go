@@ -300,6 +300,9 @@ func EstimateCostUSD(model string, promptTokens, completionTokens int) (float64,
 	if promptTokens < 0 || completionTokens < 0 {
 		return 0, "cost estimate unavailable: negative token counts", false
 	}
+	if promptTokens == 0 && completionTokens == 0 {
+		return 0, "cost estimate unavailable: no token usage reported", false
+	}
 	const (
 		inputPerMillion  = 0.15
 		outputPerMillion = 0.60
@@ -318,7 +321,10 @@ func smokeLimitations(mode SmokeMode) []string {
 		"No autonomous remediation is performed.",
 	}
 	if mode == SmokeModeOffline {
-		out = append(out, "Offline mode uses a fixture response; real provider compatibility was NOT executed.")
+		out = append(out,
+			"Offline mode uses a fixture response; real provider compatibility was NOT executed.",
+			"Token counts and cost estimates in offline mode are fixture-derived, not measured provider usage.",
+		)
 	} else {
 		out = append(out, "Real provider mode requires explicit authorization and incurs provider cost.")
 	}
