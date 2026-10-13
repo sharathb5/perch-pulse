@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Iterator, Protocol
 
 SENSITIVE_KEY_RE = re.compile(
     r"(api[_-]?key|authorization|bearer|password|secret|token|credential)",
@@ -301,12 +303,26 @@ def log_eval_report(
     return result
 
 
+@contextmanager
+def _bounded_mlflow_http(timeout_sec: int) -> Iterator[None]:
+    """Apply MLFLOW_HTTP_REQUEST_TIMEOUT for the duration of live calls only."""
+    key = "MLFLOW_HTTP_REQUEST_TIMEOUT"
+    prev = os.environ.get(key)
+    os.environ[key] = str(max(1, int(timeout_sec)))
+    try:
+        yield
+    finally:
+        if prev is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = prev
+
+
 class LiveMLflowClient:
     """Thin live wrapper. Failures surface as exceptions for log_eval_report to classify.
 
     No automatic billable retries. Operators must re-invoke explicitly.
-    Prefer setting MLFLOW_HTTP_REQUEST_TIMEOUT in the environment (seconds) for
-    bounded HTTP; default guidance is LIVE_MLFLOW_TIMEOUT_SEC.
+    HTTP is bounded via MLFLOW_HTTP_REQUEST_TIMEOUT for the call scope.
     """
 
     def __init__(self, *, experiment: str, timeout_sec: int = LIVE_MLFLOW_TIMEOUT_SEC) -> None:
@@ -317,24 +333,26 @@ class LiveMLflowClient:
         self._mlflow = mlflow
         self._experiment = experiment
         self._timeout_sec = max(1, int(timeout_sec))
-        mlflow.set_experiment(experiment)
+        with _bounded_mlflow_http(self._timeout_sec):
+            mlflow.set_experiment(experiment)
 
     def log_run(self, payload: dict[str, Any]) -> str:
         mlflow = self._mlflow
         # Versioned run name from eval_run_id for operator visibility (not exactly-once).
         run_name = f"eval-{payload.get('params', {}).get('eval_run_id', 'unknown')}"[:200]
-        with mlflow.start_run(run_name=run_name) as run:
-            for k, v in (payload.get("params") or {}).items():
-                if v is not None and v != "":
-                    mlflow.log_param(k, v)
-            for k, v in (payload.get("metrics") or {}).items():
-                mlflow.log_metric(k, float(v))
-            for k, v in (payload.get("tags") or {}).items():
-                mlflow.set_tag(k, v)
-            artifact = payload.get("artifact") or {}
-            # Artifact is already redacted in build_eval_payload.
-            with tempfile.TemporaryDirectory() as td:
-                path = Path(td) / "eval_summary.json"
-                path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
-                mlflow.log_artifact(str(path), artifact_path="eval")
-            return run.info.run_id
+        with _bounded_mlflow_http(self._timeout_sec):
+            with mlflow.start_run(run_name=run_name) as run:
+                for k, v in (payload.get("params") or {}).items():
+                    if v is not None and v != "":
+                        mlflow.log_param(k, v)
+                for k, v in (payload.get("metrics") or {}).items():
+                    mlflow.log_metric(k, float(v))
+                for k, v in (payload.get("tags") or {}).items():
+                    mlflow.set_tag(k, v)
+                artifact = payload.get("artifact") or {}
+                # Artifact is already redacted in build_eval_payload.
+                with tempfile.TemporaryDirectory() as td:
+                    path = Path(td) / "eval_summary.json"
+                    path.write_text(json.dumps(artifact, indent=2), encoding="utf-8")
+                    mlflow.log_artifact(str(path), artifact_path="eval")
+                return run.info.run_id

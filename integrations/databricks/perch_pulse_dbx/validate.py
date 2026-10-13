@@ -202,6 +202,16 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
                     )
                 )
                 declared_count = None
+            if declared_count is not None and declared_count < 0:
+                result.issues.append(
+                    ValidationIssue(
+                        "error",
+                        "invalid_manifest_row_count",
+                        f"manifest dataset {dataset}: row_count {declared_count} must be >= 0",
+                        dataset=dataset,
+                    )
+                )
+                declared_count = None
             declared_file = entry.get("file")
             if declared_file not in (None, "", f"{dataset}.jsonl"):
                 result.issues.append(
@@ -215,7 +225,8 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
 
         if not path.is_file():
             # Intentionally empty: listed with row_count==0 or omitted from manifest.
-            if declared_count is not None and declared_count > 0:
+            # Missing file is only OK when declared_count is 0 (or dataset omitted).
+            if declared_count is not None and declared_count != 0:
                 result.issues.append(
                     ValidationIssue(
                         "error",
@@ -326,14 +337,17 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
         result.datasets[dataset] = valid_rows
         result.counts[dataset] = len(valid_rows)
 
-        if declared_count is not None and declared_count != len(rows):
-            # Compare against on-disk row count (before envelope filtering) so a
-            # corrupt/partial file cannot be silently accepted as a shorter batch.
+        # F3a manifest/checkpoint row_count tracks unique dedupe_keys (append-only
+        # fingerprint history may add extra JSONL lines for the same key).
+        unique_keys = {str(r.get("dedupe_key", "")) for r in rows if isinstance(r, dict)}
+        unique_keys.discard("")
+        if declared_count is not None and declared_count != len(unique_keys):
             result.issues.append(
                 ValidationIssue(
                     "error",
                     "manifest_count_mismatch",
-                    f"manifest row_count={declared_count} for {dataset} but {dataset}.jsonl has {len(rows)} rows",
+                    f"manifest row_count={declared_count} for {dataset} but jsonl has "
+                    f"{len(unique_keys)} unique dedupe_keys ({len(rows)} lines)",
                     dataset=dataset,
                 )
             )

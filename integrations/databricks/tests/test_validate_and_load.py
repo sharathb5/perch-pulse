@@ -133,6 +133,39 @@ def test_manifest_count_mismatch(tmp_path: Path):
     assert any(i.code == "manifest_count_mismatch" for i in res.errors())
 
 
+def test_manifest_count_allows_fingerprint_history_lines(tmp_path: Path):
+    """Manifest row_count is unique dedupe_keys; append-only history may add lines."""
+    _write_sidecars(
+        tmp_path,
+        datasets=[{"name": "incidents", "row_count": 1, "file": "incidents.jsonl"}],
+    )
+    base = {
+        "export_schema_version": "pulse.export.analytics.v1",
+        "dataset": "incidents",
+        "dedupe_key": "inc-1",
+        "source_schema_version": "pulse.incident.v1",
+        "provenance_class": "synthetic_fixture",
+        "exported_at": "2026-10-13T00:00:00Z",
+    }
+    r1 = {**base, "content_fingerprint": "ab" * 32}
+    r2 = {**base, "content_fingerprint": "cd" * 32}
+    (tmp_path / "incidents.jsonl").write_text(
+        json.dumps(r1) + "\n" + json.dumps(r2) + "\n", encoding="utf-8"
+    )
+    res = validate_export_dir(tmp_path)
+    assert res.ok, [i.message for i in res.errors()]
+
+
+def test_negative_manifest_count_rejected(tmp_path: Path):
+    _write_sidecars(
+        tmp_path,
+        datasets=[{"name": "incidents", "row_count": -1, "file": "incidents.jsonl"}],
+    )
+    res = validate_export_dir(tmp_path)
+    assert not res.ok
+    assert any(i.code == "invalid_manifest_row_count" for i in res.errors())
+
+
 def test_invalid_content_fingerprint_rejected(tmp_path: Path):
     _write_sidecars(
         tmp_path,

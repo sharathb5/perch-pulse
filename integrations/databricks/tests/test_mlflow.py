@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 
+import os
+
 from perch_pulse_dbx.mlflow_eval import (
     FakeMLflowClient,
+    _bounded_mlflow_http,
     classify_mlflow_error,
     log_eval_report,
     redact_mapping,
@@ -96,3 +99,21 @@ def test_empty_run_id_not_success():
     res = log_eval_report({"aggregate": {}}, client=EmptyID(), live=False)
     assert not res.ok
     assert res.error_category == "empty_run_id"
+
+
+def test_bounded_mlflow_http_sets_and_restores_timeout():
+    key = "MLFLOW_HTTP_REQUEST_TIMEOUT"
+    prev = os.environ.pop(key, None)
+    try:
+        with _bounded_mlflow_http(17):
+            assert os.environ.get(key) == "17"
+        assert key not in os.environ
+        os.environ[key] = "9"
+        with _bounded_mlflow_http(17):
+            assert os.environ.get(key) == "17"
+        assert os.environ.get(key) == "9"
+    finally:
+        if prev is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = prev
