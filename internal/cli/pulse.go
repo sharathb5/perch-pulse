@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/yashg4509/perch/internal/pulse/correlate"
 	"github.com/yashg4509/perch/internal/pulse/incident"
 	"github.com/yashg4509/perch/internal/pulse/investigation"
+	pulsellm "github.com/yashg4509/perch/internal/pulse/investigation/llm"
 )
 
 func newPulseCmd() *cobra.Command {
@@ -30,6 +32,8 @@ func newPulseCmd() *cobra.Command {
 	cmd.AddCommand(newPulseContextCmd())
 	cmd.AddCommand(newPulseInvestigateCmd())
 	cmd.AddCommand(newPulseInvestigationContextCmd())
+	cmd.AddCommand(newPulseLLMStatusCmd())
+	cmd.AddCommand(newPulseLLMProposeCmd())
 	return cmd
 }
 
@@ -389,6 +393,70 @@ func newPulseInvestigationContextCmd() *cobra.Command {
 	}
 	cmd.Flags().Bool("json", false, "Emit versioned agent-context JSON instead of plain text")
 	return cmd
+}
+
+func newPulseLLMStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "llm-status",
+		Short: "Show whether optional LLM investigation is configured (no secrets)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := pulsellm.ConfigFromEnv()
+			if err != nil {
+				return err
+			}
+			enc := json.NewEncoder(cmd.OutOrStdout())
+			enc.SetIndent("", "  ")
+			return enc.Encode(cfg.Status())
+		},
+	}
+}
+
+func newPulseLLMProposeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "llm-propose",
+		Short: "Generate a constrained LLM investigation proposal for an F1 investigation id (opt-in)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runPulseLLMPropose,
+	}
+	cmd.Flags().String("expected-fingerprint", "", "Reject if F1 snapshot fingerprint differs")
+	return cmd
+}
+
+func runPulseLLMPropose(cmd *cobra.Command, args []string) error {
+	dir, err := pulseDataDir(cmd)
+	if err != nil {
+		return err
+	}
+	cfg, err := pulsellm.ConfigFromEnv()
+	if err != nil {
+		return err
+	}
+	if !cfg.Available() {
+		return fmt.Errorf("%s", cfg.UnavailabilityReason())
+	}
+	fp, _ := cmd.Flags().GetString("expected-fingerprint")
+	invStore := investigation.NewFileStore(dir)
+	svc := &pulsellm.Service{
+		Config:         cfg,
+		Investigations: pulsellm.InvestigationAdapter{Store: invStore},
+		Store:          pulsellm.NewFileStore(dir),
+		Client:         pulsellm.NewHTTPClientFromConfig(cfg),
+	}
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	prop, err := svc.Propose(ctx, pulsellm.ProposeOptions{
+		InvestigationID:     args[0],
+		ExpectedFingerprint: strings.TrimSpace(fp),
+	})
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(prop)
 }
 
 func runPulseInvestigationContext(cmd *cobra.Command, args []string) error {

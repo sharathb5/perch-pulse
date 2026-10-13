@@ -10,6 +10,7 @@ import (
 
 	pulseapi "github.com/yashg4509/perch/internal/pulse/api"
 	"github.com/yashg4509/perch/internal/pulse/investigation"
+	pulsellm "github.com/yashg4509/perch/internal/pulse/investigation/llm"
 	"github.com/yashg4509/perch/internal/pulse/live"
 	"github.com/yashg4509/perch/internal/pulse/runpulse"
 )
@@ -45,13 +46,29 @@ func registerPulseAPI(mux *http.ServeMux, env string, ctx context.Context) (*pul
 		return nil, err
 	}
 	h := &pulseapi.Handler{Reader: reader}
+	invStore := investigation.NewFileStore(dir)
 	h.Investigations = &investigation.Service{
 		Incidents: reader.Incidents,
 		Changes:   reader.Changes,
-		Store:     investigation.NewFileStore(dir),
+		Store:     invStore,
 		Mapper:    mapper,
 	}
 	rt := &pulseRuntime{}
+
+	// LLM investigator (F2a): explicit opt-in; never required for deterministic F1.
+	if lcfg, err := pulsellm.ConfigFromEnv(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "# → Pulse LLM investigator disabled: %v\n", err)
+	} else if lcfg.Available() {
+		h.LLM = &pulsellm.Service{
+			Config:         lcfg,
+			Investigations: pulsellm.InvestigationAdapter{Store: invStore},
+			Store:          pulsellm.NewFileStore(dir),
+			Client:         pulsellm.NewHTTPClientFromConfig(lcfg),
+		}
+		_, _ = fmt.Fprintf(os.Stderr, "# → Pulse LLM investigator enabled (model %s)\n", lcfg.Model)
+	} else if lcfg.Enabled {
+		_, _ = fmt.Fprintf(os.Stderr, "# → Pulse LLM investigator unavailable: %s\n", lcfg.UnavailabilityReason())
+	}
 
 	// Run Pulse: explicit env config; invalid allowlist → engine omitted (workflows 503 / unavailable).
 	if cfg, err := runpulse.ConfigFromEnv(); err != nil {

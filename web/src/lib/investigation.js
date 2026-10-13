@@ -26,6 +26,27 @@ export function pulseInvestigationFeedbackApiPath(investigationId) {
 }
 
 /**
+ * @param {string} investigationId
+ * @returns {string}
+ */
+export function pulseInvestigationLLMProposeApiPath(investigationId) {
+  return `${pulseInvestigationApiPath(investigationId)}/llm-propose`
+}
+
+/**
+ * @param {string} investigationId
+ * @returns {string}
+ */
+export function pulseInvestigationProposalsApiPath(investigationId) {
+  return `${pulseInvestigationApiPath(investigationId)}/proposals`
+}
+
+/** @returns {string} */
+export function pulseLLMStatusApiPath() {
+  return '/api/pulse/llm/status'
+}
+
+/**
  * @param {string} incidentId
  * @returns {string}
  */
@@ -62,6 +83,7 @@ export function parseInvestigationEnvelope(raw) {
       incidentState: inv.incidentState ?? inv.incident_state ?? '',
       evidenceFreshness: inv.evidenceFreshness ?? inv.evidence_freshness ?? '',
       generationMethod: inv.generationMethod ?? inv.generation_method ?? '',
+      contentFingerprint: inv.contentFingerprint ?? inv.content_fingerprint ?? '',
       diagnosed: false,
       observedSymptoms: (inv.observedSymptoms ?? inv.observed_symptoms ?? []).map(
         normalizeSymptom,
@@ -116,6 +138,7 @@ function normalizeHypothesis(h) {
     statement: h.statement ?? '',
     classification: h.classification ?? 'INFERRED',
     kind: h.kind ?? '',
+    supportStatus: h.supportStatus ?? h.support_status ?? '',
     supportingEvidenceRefs: h.supportingEvidenceRefs ?? h.supporting_evidence_refs ?? [],
     counterEvidenceRefs: h.counterEvidenceRefs ?? h.counter_evidence_refs ?? [],
     missingEvidence: h.missingEvidence ?? h.missing_evidence ?? [],
@@ -129,6 +152,79 @@ export const FEEDBACK_ASSESSMENTS = [
   'not_useful',
   'insufficient_evidence',
 ]
+
+/**
+ * @param {unknown} raw
+ * @returns {{ ok: true, status: object } | { ok: false, error: string }}
+ */
+export function parseLLMStatusEnvelope(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: 'llm status response missing' }
+  }
+  const st = raw.status
+  if (!st || typeof st !== 'object') {
+    return { ok: false, error: 'llm status payload missing' }
+  }
+  return {
+    ok: true,
+    status: {
+      available: Boolean(st.available),
+      enabled: Boolean(st.enabled),
+      configured: Boolean(st.configured),
+      reason: st.reason ?? '',
+      model: st.model ?? '',
+      endpointHost: st.endpointHost ?? st.endpoint_host ?? '',
+      provider: st.provider ?? '',
+    },
+  }
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{ ok: true, proposal: object } | { ok: false, error: string }}
+ */
+export function parseLLMProposalEnvelope(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { ok: false, error: 'llm proposal response missing' }
+  }
+  const p = raw.proposal
+  if (!p || typeof p !== 'object') {
+    return { ok: false, error: 'llm proposal payload missing' }
+  }
+  const schema = p.schemaVersion ?? p.schema_version ?? ''
+  if (schema && schema !== 'pulse.investigation.proposal.v1') {
+    return { ok: false, error: `unsupported proposal schema ${schema}` }
+  }
+  if (p.diagnosed === true) {
+    return { ok: false, error: 'proposal claims diagnosed=true (rejected)' }
+  }
+  return {
+    ok: true,
+    proposal: {
+      schemaVersion: schema || 'pulse.investigation.proposal.v1',
+      proposalId: p.proposalId ?? p.proposal_id ?? '',
+      sourceInvestigationId: p.sourceInvestigationId ?? p.source_investigation_id ?? '',
+      sourceFingerprint: p.sourceFingerprint ?? p.source_fingerprint ?? '',
+      generationMethod: p.generationMethod ?? p.generation_method ?? 'llm_constrained_v1',
+      diagnosed: false,
+      hypotheses: (p.hypotheses ?? []).map(normalizeHypothesis),
+      rejectedHypotheses: (p.rejectedHypotheses ?? p.rejected_hypotheses ?? []).map(
+        normalizeHypothesis,
+      ),
+      missingEvidence: p.missingEvidence ?? p.missing_evidence ?? [],
+      unknowns: p.unknowns ?? [],
+      suggestedVerificationSteps:
+        p.suggestedVerificationSteps ?? p.suggested_verification_steps ?? [],
+      limitations: p.limitations ?? [],
+      validationNotes: p.validationNotes ?? p.validation_notes ?? [],
+      provenance: {
+        provider: p.provenance?.provider ?? '',
+        model: p.provenance?.model ?? '',
+        endpointHost: p.provenance?.endpointHost ?? p.provenance?.endpoint_host ?? '',
+      },
+    },
+  }
+}
 
 /**
  * @param {string} assessment

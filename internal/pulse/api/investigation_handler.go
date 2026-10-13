@@ -134,6 +134,10 @@ func (h *Handler) handleGetInvestigation(w http.ResponseWriter, r *http.Request)
 		h.handleListFeedback(w, r, strings.TrimSuffix(id, "/feedback"))
 		return
 	}
+	if strings.HasSuffix(id, "/proposals") {
+		h.handleListProposals(w, r, strings.TrimSuffix(id, "/proposals"))
+		return
+	}
 	if err := ValidateResourceID(id); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_id", err.Error())
 		return
@@ -160,7 +164,11 @@ func (h *Handler) handleInvestigationMutation(w http.ResponseWriter, r *http.Req
 		h.handleCreateFeedback(w, r, strings.TrimSuffix(id, "/feedback"))
 		return
 	}
-	writeAPIError(w, http.StatusNotFound, "not_found", "POST /api/pulse/investigations/{id}/feedback to submit feedback")
+	if strings.HasSuffix(id, "/llm-propose") {
+		h.handleLLMPropose(w, r, strings.TrimSuffix(id, "/llm-propose"))
+		return
+	}
+	writeAPIError(w, http.StatusNotFound, "not_found", "POST /api/pulse/investigations/{id}/feedback or .../llm-propose")
 }
 
 func (h *Handler) serveInvestigationContext(w http.ResponseWriter, r *http.Request, incidentID string) {

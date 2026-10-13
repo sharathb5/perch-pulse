@@ -1,4 +1,4 @@
-# Pulse HTTP API (Milestone A + E + Live + F1)
+# Pulse HTTP API (Milestone A + E + Live + F1 + F2a)
 
 Localhost JSON for the Perch React UI. Mounted on the existing `perch viz` server (127.0.0.1). See [ADR-014](DECISIONS.md), [ADR-020](DECISIONS.md), [ADR-022](DECISIONS.md), and [ADR-023](DECISIONS.md).
 
@@ -24,6 +24,16 @@ Historical intelligence routes remain GET-only. Run Pulse adds an allowlisted PO
 | GET | `/api/pulse/investigations/{id...}` | Persisted investigation snapshot |
 | POST | `/api/pulse/investigations/{id...}/feedback` | Record investigation feedback (loopback only) |
 | GET | `/api/pulse/investigations/{id...}/feedback` | List feedback for an investigation |
+| GET | `/api/pulse/llm/status` | Optional LLM investigator availability (no secrets) |
+| POST | `/api/pulse/investigations/{id...}/llm-propose` | Generate constrained LLM proposal (loopback; opt-in) |
+| GET | `/api/pulse/investigations/{id...}/proposals` | List LLM proposals for an investigation |
+| GET | `/api/pulse/proposals/{id...}` | Persisted LLM proposal |
+| POST | `/api/pulse/proposals/{id...}/feedback` | Proposal-only feedback (not F1 feedback) |
+| GET | `/api/pulse/llm/status` | Optional LLM investigator availability (no secrets) |
+| POST | `/api/pulse/investigations/{id...}/llm-propose` | Generate constrained LLM proposal (loopback only; opt-in) |
+| GET | `/api/pulse/investigations/{id...}/proposals` | List LLM proposals for an investigation |
+| GET | `/api/pulse/proposals/{id...}` | Load a persisted LLM proposal |
+| POST | `/api/pulse/proposals/{id...}/feedback` | Proposal-only feedback (not mixed with F1 feedback) |
 
 `{id...}` is required because Pulse IDs embed `/` (e.g. `inc|astronomy/local/shipping|…`).
 

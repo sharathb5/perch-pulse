@@ -11,6 +11,7 @@ import (
 	"github.com/yashg4509/perch/internal/pulse/correlate"
 	"github.com/yashg4509/perch/internal/pulse/incident"
 	"github.com/yashg4509/perch/internal/pulse/investigation"
+	"github.com/yashg4509/perch/internal/pulse/investigation/llm"
 	"github.com/yashg4509/perch/internal/pulse/runpulse"
 )
 
@@ -18,6 +19,7 @@ import (
 // Historical Pulse routes remain GET-only; Run Pulse adds allowlisted POST /api/pulse/runs.
 // Live Pulse adds optional GET /api/pulse/live/* over a collector snapshot.
 // Milestone F1 adds investigation assemble/feedback POSTs (loopback-only).
+// Milestone F2a adds optional LLM propose routes (disabled by default; loopback POSTs).
 type Handler struct {
 	Reader *Reader
 	// Runs is optional; when nil, workflow/run endpoints return 503.
@@ -26,6 +28,8 @@ type Handler struct {
 	Live LiveSource
 	// Investigations is optional; when nil, investigation endpoints return 503.
 	Investigations *investigation.Service
+	// LLM is optional; when nil, LLM status reports unavailable and propose returns 503.
+	LLM *llm.Service
 }
 
 // Register mounts Pulse routes on mux.
@@ -40,6 +44,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	h.registerRunRoutes(mux)
 	h.registerLiveRoutes(mux)
 	h.registerInvestigationRoutes(mux)
+	h.registerLLMRoutes(mux)
 }
 
 func (h *Handler) handleServices(w http.ResponseWriter, r *http.Request) {
