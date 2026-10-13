@@ -28,7 +28,7 @@ Rules:
 
 ---
 
-## ADR-029: LLM citation reliability guidance + rejection diagnostics (F2c follow-up)
+## ADR-031: LLM citation reliability guidance + rejection diagnostics (F2c follow-up)
 
 **Date:** 2026-10-13  
 **Status:** Accepted  
@@ -65,6 +65,77 @@ authorized and billable; this ADR does not authorize paid calls.
 **Alternatives considered:** Auto-retry on validation failure (rejected: cost);
 silently dropping rejected hypotheses to pass compatibility (rejected: honesty);
 relaxing causal/citation policy (rejected: evidence integrity).
+
+## ADR-030: Release-candidate demo orchestration and honest validation labels
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+
+**Context:** Milestones through F3b exist on stacked PRs (#44 F2c, #45 F3b). A
+recruiting demo needs a single offline journey, clear LIVE/MOCK/REPLAY labeling,
+and executable staging+MERGE code without claiming unpaid cloud runs succeeded.
+
+**Decision:**
+1. Ship `scripts/demo/pulse-demo.sh` coordinating existing CLI/eval/export/dbx
+   commands; modes `mock|replay|live` never mixed silently.
+2. Document journey honesty in `docs/verification-matrix.md`, runbook, and 3–5
+   minute script; rewrite root README for Pulse without deleting upstream Perch
+   context.
+3. Extend F3b with `stage.py` + `live-load --execute-merge` + offline
+   `verify-lineage`; connection-only remains the default live action.
+4. Label REAL LLM / LIVE DELTA / LIVE MLFLOW as **NOT RUN** unless authorize
+   flags produced `real_provider_executed` / `rows_merged` / `live_executed`.
+5. UI polish limited to investigation clarity (F1 vs LLM, lifecycle badges) —
+   no visual redesign; no invented cloud metrics in the browser.
+
+**Consequences:** Demo is repeatable offline under disk pressure; authorized
+cloud paths are ready but not auto-executed. Integration onto `main` retains
+ADR-031 citation reliability fixes from #48.
+
+**Alternatives considered:** New agent orchestration framework (rejected);
+auto-running paid smokes when keys exist (rejected); claiming connection=ingest
+(rejected).
+
+## ADR-029: Databricks Delta + MLflow integration (Milestone F3b)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F3a emits local JSONL analytical exports. Operators need a
+reproducible path into Delta tables and MLflow evaluation lineage without making
+Databricks a core Perch dependency, without guessing incompatible schemas, and
+without implying cloud execution from unit tests.
+
+**Decision:**
+1. Add optional Python package `integrations/databricks` (`perch-pulse-dbx`) with
+   stdlib-first validate/dry-run/merge-plan; pin `databricks-sdk` and `mlflow` as
+   extras only.
+2. Reject unsupported `export_schema_version` instead of silent field mapping.
+3. Domain-isolate tables via schema suffixes (`*_observed`, `*_synthetic`,
+   `*_model`, `*_human`, `*_evaluation`) from `provenance_class`.
+4. Append-only MERGE on `(dedupe_key, content_fingerprint)` matching F3a history
+   lines; **never DELETE** when a key is absent from a newer export; never
+   UPDATE-collapse fingerprint history.
+5. Safe identifier allowlist; no untrusted SQL interpolation.
+6. MLflow logs metrics with explicit denominators; missing token/cost metrics are
+   unavailable (not zero). Artifacts are compact and redacted.
+7. Live paths require authorize flags + existing warehouse ID; default live action
+   is a connection check (`SELECT 1`), not an unstaged MERGE. Never auto-create
+   paid clusters. CI runs offline tests only.
+8. Authorized `--execute-merge` lands bounded JSONL batches into `stg_*` tables,
+   runs append-only MERGE, and records COUNT/sample-key lineage readback
+   (`rows_merged=true` only on success). Offline `verify-lineage` simulates this
+   with FakeSQLExecutor (ADR-030).
+
+**Consequences:** Core `make verify` remains Go/Web. F3b CI is a lightweight
+Python job. Real Databricks/MLflow runs are reported honestly as NOT RUN unless
+authorized execution occurred. Connection checks must not be described as
+completed ingestion.
+
+**Alternatives considered:** Embedding Spark in the Go binary (rejected: weight);
+Autoloader-only docs without executable offline path (rejected: unverifiable);
+auto-provisioning warehouses (rejected: cost/safety).
 
 ## ADR-028: Real LLM provider validation (Milestone F2c)
 

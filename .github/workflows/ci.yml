@@ -50,3 +50,16 @@ jobs:
 
       - name: Pulse pipeline integration
         run: make pulse-integration
+
+  # Offline F3b Python integration — no Databricks/MLflow credentials.
+  databricks-integration:
+    name: Databricks integration (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline validate / merge-plan / MLflow fake tests
+        run: make databricks-integration-test
