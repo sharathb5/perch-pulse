@@ -312,7 +312,17 @@ def validate_export_dir(export_dir: str | Path, *, max_batch: int = MAX_BATCH_DE
                     )
                 )
                 continue
-            dk = str(row.get("dedupe_key", ""))
+            dk = str(row.get("dedupe_key", "")).strip()
+            if not dk:
+                result.issues.append(
+                    ValidationIssue(
+                        "error",
+                        "empty_dedupe_key",
+                        f"{dataset} row {idx}: dedupe_key is empty",
+                        dataset=dataset,
+                    )
+                )
+                continue
             if dk in seen_keys[dataset]:
                 # Same key may appear with different fingerprints (append history).
                 # Duplicate key+fingerprint is an error.

@@ -166,6 +166,26 @@ def test_negative_manifest_count_rejected(tmp_path: Path):
     assert any(i.code == "invalid_manifest_row_count" for i in res.errors())
 
 
+def test_empty_dedupe_key_rejected(tmp_path: Path):
+    _write_sidecars(
+        tmp_path,
+        datasets=[{"name": "incidents", "row_count": 0, "file": "incidents.jsonl"}],
+    )
+    row = {
+        "export_schema_version": "pulse.export.analytics.v1",
+        "dataset": "incidents",
+        "dedupe_key": "",
+        "content_fingerprint": "ab" * 32,
+        "source_schema_version": "pulse.incident.v1",
+        "provenance_class": "synthetic_fixture",
+        "exported_at": "2026-10-13T00:00:00Z",
+    }
+    (tmp_path / "incidents.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    res = validate_export_dir(tmp_path)
+    assert not res.ok
+    assert any(i.code == "empty_dedupe_key" for i in res.errors())
+
+
 def test_invalid_content_fingerprint_rejected(tmp_path: Path):
     _write_sidecars(
         tmp_path,
