@@ -75,6 +75,7 @@ test.describe('Pulse sidebar (Milestone C)', () => {
     await page.getByTestId('pulse-investigate-btn').click()
     await expect(page.getByTestId('pulse-evidence-investigation')).toBeVisible()
     await expect(page.getByTestId('pulse-evidence-not-diagnosed')).toContainText('diagnosed')
+    await expect(page.getByTestId('pulse-method-compare-hint')).toContainText('F1')
     await expect(page.getByTestId('pulse-evidence-hypotheses')).toContainText('HYPOTHESIS')
     await expect(page.getByTestId('pulse-evidence-hypotheses')).toContainText('latency')
     await expect(page.getByTestId('pulse-evidence-unknowns')).toContainText('UNKNOWN')

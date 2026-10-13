@@ -4,6 +4,16 @@
 --
 -- Retention: append/upsert only. Never DELETE historical rows when a key is
 -- absent from a newer export.
+--
+-- Runtime path (authorized live-load --execute-merge):
+--   CREATE SCHEMA IF NOT EXISTS …
+--   CREATE TABLE IF NOT EXISTS <target> (envelope + payload) USING DELTA
+--   CREATE OR REPLACE TABLE <stg_*> AS SELECT * FROM <target> WHERE 1=0
+--   INSERT INTO <stg_*> … (bounded batches)
+--   MERGE INTO <target> t USING <stg_*> s
+--     ON t.dedupe_key = s.dedupe_key AND t.content_fingerprint = s.content_fingerprint
+--     WHEN NOT MATCHED THEN INSERT *
+--   SELECT COUNT(*) / sample keys for lineage readback
 
 -- Example (validated identifiers):
 -- CREATE SCHEMA IF NOT EXISTS perch_pulse.analytics_observed;
@@ -12,17 +22,8 @@
 --   content_fingerprint STRING NOT NULL,
 --   export_schema_version STRING NOT NULL,
 --   provenance_class STRING NOT NULL,
---   exported_at TIMESTAMP NOT NULL,
---   observation_at TIMESTAMP,
---   incident_id STRING,
---   primary_service_id STRING,
---   environment STRING,
---   payload STRING COMMENT 'JSON object of allowlisted fields'
+--   exported_at STRING NOT NULL,
+--   observation_at STRING,
+--   payload STRING COMMENT 'JSON object of remaining allowlisted fields'
 -- ) USING DELTA
 -- TBLPROPERTIES (delta.autoOptimize.optimizeWrite = true);
-
--- MERGE semantics (see merge_plan.build_merge_sql):
--- MERGE INTO <target> t USING <staging> s
--- ON t.dedupe_key = s.dedupe_key
--- WHEN MATCHED AND t.content_fingerprint <> s.content_fingerprint THEN UPDATE SET *
--- WHEN NOT MATCHED THEN INSERT *;

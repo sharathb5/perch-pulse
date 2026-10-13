@@ -602,7 +602,11 @@ function IncidentsPanel({
                   <span
                     data-testid="pulse-incident-lifecycle"
                     data-lifecycle={inc.lifecycle || (inc.open ? 'active' : 'recovered')}
-                    className="font-medium text-gray-900"
+                    className={
+                      inc.open || inc.lifecycle === LIVE_LIFECYCLE.ACTIVE
+                        ? 'rounded border border-orange-200 bg-orange-50 px-1 font-medium text-orange-900'
+                        : 'rounded border border-gray-200 bg-gray-50 px-1 font-medium text-gray-700'
+                    }
                   >
                     {incidentStateLabel(inc)}
                   </span>
@@ -676,7 +680,9 @@ function EvidenceInvestigationReport({
   return (
     <section data-testid="pulse-evidence-investigation" className="space-y-2 rounded border border-gray-200 bg-white px-2 py-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[10px] uppercase tracking-wide text-gray-400">Evidence investigation</h3>
+        <h3 className="text-[10px] uppercase tracking-wide text-gray-400">
+          Deterministic investigation (F1)
+        </h3>
         <ClassificationBadge label="OBSERVED" />
       </div>
       <p className="font-mono text-[10px] text-gray-500 break-all">{investigation.investigationId}</p>
@@ -685,7 +691,11 @@ function EvidenceInvestigationReport({
         <span data-testid="pulse-method-deterministic">{investigation.generationMethod || 'deterministic'}</span>
       </p>
       <p data-testid="pulse-evidence-not-diagnosed" className="text-[10px] text-amber-800">
-        Report generated ≠ diagnosed. Hypotheses are INFERRED.
+        Report generated ≠ diagnosed. Hypotheses are INFERRED — not proven root cause.
+      </p>
+      <p data-testid="pulse-method-compare-hint" className="text-[10px] text-gray-500">
+        F1 is the evidence-backed baseline. Optional AI below is a separate proposal with citation
+        checks — compare them; do not treat either as confirmed causation.
       </p>
 
       <div data-testid="pulse-evidence-symptoms">
@@ -756,12 +766,14 @@ function EvidenceInvestigationReport({
 
       <div data-testid="pulse-llm-investigation" className="space-y-1 border-t border-gray-100 pt-2">
         <div className="flex items-center gap-1">
-          <h4 className="text-[10px] uppercase tracking-wide text-gray-400">AI investigation (optional)</h4>
+          <h4 className="text-[10px] uppercase tracking-wide text-gray-400">
+            Model proposal (optional LLM)
+          </h4>
           <ClassificationBadge label="INFERRED" />
         </div>
         <p className="text-[10px] text-gray-500">
-          Generates a separate validated proposal. Does not replace the deterministic report or confirm
-          root cause.
+          Separate from F1. Citations must resolve to snapshot evidence. Unavailable when the server
+          has not opted in — never invents a live model response in the UI.
         </p>
         {!llmAvailable && (
           <p data-testid="pulse-llm-unavailable" className="text-[10px] text-gray-500">
@@ -785,6 +797,12 @@ function EvidenceInvestigationReport({
         )}
         {llmProposal && (
           <div data-testid="pulse-llm-proposal" className="space-y-1 rounded border border-amber-100 bg-amber-50/30 px-2 py-1.5">
+            <p
+              data-testid="pulse-f1-vs-llm"
+              className="text-[10px] font-medium text-amber-900"
+            >
+              Comparing F1 (above) vs model proposal — mechanical citation pass ≠ semantic entailment.
+            </p>
             <p className="font-mono text-[10px] text-gray-500 break-all">{llmProposal.proposalId}</p>
             <p className="text-[10px] text-gray-500">
               method <span data-testid="pulse-method-llm">{llmProposal.generationMethod}</span>
