@@ -32,18 +32,18 @@ Legend:
 | 13 | Human feedback | **OFFLINE VERIFIED** | Playwright + FileStore API |
 | 14 | Evaluation compares methods | **OFFLINE VERIFIED** | F2b/F2c corpora; explicit denominators |
 | 15 | JSONL analytical export | **OFFLINE VERIFIED** | F3a `export-analytics` + sample fixture |
-| 16 | Databricks Delta ingest | **OFFLINE VERIFIED** (validate/stage-sim/MERGE plan); live **BLOCKED BY AUTHORIZATION** | Staging+MERGE code path exists; `LIVE DELTA INGESTION = NOT RUN` without authorize |
-| 17 | MLflow tracks evaluations | **OFFLINE VERIFIED** (fake client); live **BLOCKED BY AUTHORIZATION** | `LIVE MLFLOW TRACKING = NOT RUN` |
-| 18 | Engineer verifies lineage | **OFFLINE VERIFIED** (simulate); live **BLOCKED BY AUTHORIZATION** | `perch_pulse_dbx verify-lineage` (fake); live lineage via `--execute-merge` readback |
+| 16 | Databricks Delta ingest | **LIVE VERIFIED** (2026-10-13 demo sample); also **OFFLINE VERIFIED** | See [dated evidence](#2026-10-13--live-databricks-delta--mlflow-demo-sample) |
+| 17 | MLflow tracks evaluations | **LIVE VERIFIED** (2026-10-13 demo eval report); also **OFFLINE VERIFIED** (fake client) | Experiment `/Users/sharathjb23@gmail.com/perch-pulse-investigation-eval`; synthetic fixtures ≠ live model quality |
+| 18 | Engineer verifies lineage | **LIVE VERIFIED** (COUNT/key readback + idempotent rerun); also **OFFLINE VERIFIED** (fake) | Identical 37-row rerun left all table counts unchanged |
 
 ## External validation flags (this release candidate)
 
 | Check | Status |
 |-------|--------|
 | REAL LLM VALIDATION | **NOT RUN** |
-| LIVE DELTA INGESTION | **NOT RUN** |
-| LIVE MLFLOW TRACKING | **NOT RUN** |
-| Full Astronomy Shop live-fault → UI | Prefer prior 2026-10-09 shop evidence + offline offline UI; do not re-run heavy Docker when disk &lt; 15 GiB |
+| LIVE DELTA INGESTION | **EXECUTED** (2026-10-13) — demo/synthetic sample only |
+| LIVE MLFLOW TRACKING | **EXECUTED** (2026-10-13) — offline eval report logged live; not real-model performance |
+| Full Astronomy Shop live-fault → UI | Prefer prior 2026-10-09 shop evidence + lighter offline UI; do not re-run heavy Docker when disk &lt; 15 GiB |
 
 ## Automated gates (no paid services)
 
@@ -60,5 +60,23 @@ Legend:
 
 - **2026-10-09** — Astronomy Shop minimal stack + scenario harness including `error-payment` activation/recovery ([`astronomy-shop.md`](astronomy-shop.md)).
 - Live-fault CI shipping-latency attempt failed historically; CI scenario selected is `error-payment` ([`pulse-live.md`](pulse-live.md)).
+
+### 2026-10-13 — Live Databricks Delta + MLflow (demo sample)
+
+One-time authorized validation against workspace `dbc-1f1b342b-da90.cloud.databricks.com` using existing warehouse `e988309748ef6ac6` (Serverless Starter, 2X-Small, auto-stop 10 min). **No new compute created. No DROP/DELETE. No paid LLM calls.**
+
+| Item | Value |
+|------|--------|
+| Input | `examples/pulse-export/sample/export/` — **37 demo rows** (`historical_demo` / `synthetic_fixture` / `model_generated` / `human_assessment` / `evaluation_annotation`) |
+| Catalog / base schema | `workspace` / `analytics` (domain schemas `analytics_observed`, `analytics_synthetic`, `analytics_model`, `analytics_human`, `analytics_evaluation`) |
+| First load | `rows_merged=true`; ~161 s; 10 target tables; counts 0→expected |
+| Idempotent rerun | Identical load; all `count_before == count_after`; totals **37 → 37** (no duplicate key+fingerprint rows). Does **not** claim exactly-once delivery. |
+| Merge keys | `(dedupe_key, content_fingerprint)` append-only |
+| MLflow experiment | `/Users/sharathjb23@gmail.com/perch-pulse-investigation-eval` (id `605098882307471`) |
+| MLflow run | `193935ec502f4496a5a7a1fc44118f6f` (`FINISHED`); artifact `eval/eval_summary.json`; token/cost metrics **unavailable** (not zero) |
+| Warehouse after session | Left **RUNNING** (existing auto-stop unchanged) |
+| Disk after session | ~24 GiB free on `/` |
+
+**Honesty:** This proves F3a JSONL → staging → Delta MERGE → readback → idempotent skip and live MLflow persistence for the **demo fixture**. It does not prove production telemetry quality, statistical model performance, or exactly-once warehouse semantics.
 
 Do not cite fixture eval scores as production model quality.

@@ -73,7 +73,7 @@ python -m perch_pulse_dbx dry-run --export-dir examples/pulse-export/sample/expo
 State clearly:
 
 - **REAL LLM VALIDATION = NOT RUN** (unless you just authorized it)
-- **LIVE DELTA INGESTION = NOT RUN** / **LIVE MLFLOW TRACKING = NOT RUN** unless authorized live path ran with `rows_merged=true`
+- **LIVE DELTA INGESTION / LIVE MLFLOW TRACKING** — say **NOT RUN** unless this session authorized cloud; a dated demo PASS exists for 2026-10-13 ([`verification-matrix.md`](verification-matrix.md#2026-10-13--live-databricks-delta--mlflow-demo-sample)) and must still be labeled demo/synthetic, not production
 
 Do not invent row counts or MLflow metrics.
 
