@@ -1,0 +1,28 @@
+-- Pulse F3b Delta DDL templates (identifiers must be substituted only after
+-- allowlist validation in perch_pulse_dbx.identifiers).
+-- Do NOT paste untrusted catalog/schema/table names into this file.
+--
+-- Retention: append/upsert only. Never DELETE historical rows when a key is
+-- absent from a newer export.
+
+-- Example (validated identifiers):
+-- CREATE SCHEMA IF NOT EXISTS perch_pulse.analytics_observed;
+-- CREATE TABLE IF NOT EXISTS perch_pulse.analytics_observed.pulse_incidents (
+--   dedupe_key STRING NOT NULL,
+--   content_fingerprint STRING NOT NULL,
+--   export_schema_version STRING NOT NULL,
+--   provenance_class STRING NOT NULL,
+--   exported_at TIMESTAMP NOT NULL,
+--   observation_at TIMESTAMP,
+--   incident_id STRING,
+--   primary_service_id STRING,
+--   environment STRING,
+--   payload STRING COMMENT 'JSON object of allowlisted fields'
+-- ) USING DELTA
+-- TBLPROPERTIES (delta.autoOptimize.optimizeWrite = true);
+
+-- MERGE semantics (see merge_plan.build_merge_sql):
+-- MERGE INTO <target> t USING <staging> s
+-- ON t.dedupe_key = s.dedupe_key
+-- WHEN MATCHED AND t.content_fingerprint <> s.content_fingerprint THEN UPDATE SET *
+-- WHEN NOT MATCHED THEN INSERT *;

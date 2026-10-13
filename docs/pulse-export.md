@@ -106,10 +106,22 @@ Each successful export writes `quality-report.json` covering schema compliance,
 stable IDs, duplicates, joins, timestamps, redaction suspects, fingerprints,
 checkpoint consistency, and orphaned feedback.
 
-## F3b design (not implemented)
+## F3b implementation (optional Python package)
 
-See [Databricks + MLflow next phase](#f3b-databricks--mlflow-design-not-implemented)
-below. F3a does **not** claim Delta/MLflow execution.
+Executable offline validation, dry-run MERGE planning, and opt-in live load /
+MLflow logging live under [`integrations/databricks/`](../integrations/databricks/).
+See [ADR-029](DECISIONS.md). **Core Perch does not import this package.**
+
+```bash
+cd integrations/databricks && pip install -e ".[test]"
+python -m perch_pulse_dbx validate --export-dir ../../examples/pulse-export/sample/export
+python -m perch_pulse_dbx dry-run --export-dir ../../examples/pulse-export/sample/export --json
+python -m perch_pulse_dbx mlflow-log --report ../../examples/pulse-export/sample/eval-report.json --json
+make -C ../.. databricks-integration-test
+```
+
+Live Databricks/MLflow requires explicit authorize flags and an existing warehouse.
+F3a still does **not** perform Delta/MLflow execution by itself.
 
 ---
 
@@ -126,10 +138,11 @@ Not exported as datasets: raw observation blobs, RunPulse full payloads (only
 
 ---
 
-## F3b: Databricks + MLflow design (not implemented)
+## F3b: Databricks + MLflow design notes
 
-This section is architecture-only. **Do not provision clusters or store cloud
-credentials for F3a.**
+Executable tooling is in `integrations/databricks/` (ADR-029). The notes below
+remain the warehouse design constraints. **Do not provision clusters or store
+cloud credentials in this repository.**
 
 ### Loading JSONL into Delta
 
