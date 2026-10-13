@@ -196,18 +196,8 @@ func validateOneHypothesis(
 	if class != "" && class != string(investigation.ClassInferred) {
 		return h, "classification must be INFERRED", ""
 	}
-	if confirmedCauseRE.MatchString(stmt) || confirmedCauseRE.MatchString(h.SuggestedVerification) {
-		return h, "unsupported confirmed-root-cause language", ""
-	}
-	if causalClaimRE.MatchString(stmt) {
-		return h, "causal attribution language is not allowed (correlation ≠ causation)", ""
-	}
-	if confidencePctRE.MatchString(stmt) {
-		return h, "confidence percentages are not allowed", ""
-	}
-	if fabricatedMetricRE.MatchString(stmt) && !statementSupportedByObservedMetrics(stmt, inv) {
-		return h, "invented metric language without supporting observed evidence", ""
-	}
+	// Citation ID checks run before language-policy checks so rejection categories
+	// and smoke diagnostics reflect whether IDs were actually evaluated.
 	if len(h.SupportingEvidenceRefs) == 0 {
 		return h, "missing supporting_evidence_refs", ""
 	}
@@ -226,6 +216,18 @@ func validateOneHypothesis(
 		if _, ok := svcOK[tok]; !ok {
 			return h, fmt.Sprintf("fabricated service id %q", tok), ""
 		}
+	}
+	if confirmedCauseRE.MatchString(stmt) || confirmedCauseRE.MatchString(h.SuggestedVerification) {
+		return h, "unsupported confirmed-root-cause language", ""
+	}
+	if causalClaimRE.MatchString(stmt) {
+		return h, "causal attribution language is not allowed (correlation ≠ causation)", ""
+	}
+	if confidencePctRE.MatchString(stmt) {
+		return h, "confidence percentages are not allowed", ""
+	}
+	if fabricatedMetricRE.MatchString(stmt) && !statementSupportedByObservedMetrics(stmt, inv) {
+		return h, "invented metric language without supporting observed evidence", ""
 	}
 	note := ""
 	if !citationsPlausiblySupport(stmt, h.SupportingEvidenceRefs, inv) {

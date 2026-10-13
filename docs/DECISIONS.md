@@ -28,6 +28,44 @@ Rules:
 
 ---
 
+## ADR-029: LLM citation reliability guidance + rejection diagnostics (F2c follow-up)
+
+**Date:** 2026-10-13  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** The first authorized OpenAI smoke (`gpt-4o-mini`) parsed structured
+JSON and produced mixed accepted/rejected hypotheses. The strict compatibility
+gate correctly failed (`citations_resolved=false`, `compatibility_ok=false`),
+but operators lacked machine-readable rejection categories, and the model prompt
+did not surface a compact allowlisted evidence index derived from the F1
+snapshot.
+
+**Decision:**
+1. Keep citation, causality, and fingerprint validation **strict**. Partial
+   acceptance remains visible but must fail the overall compatibility gate.
+2. Add a bounded `citation_index` (id + kind only) plus clearer citation
+   instructions in the system/user prompts. Do not duplicate large evidence
+   bodies or raise token/payload limits without justification.
+3. Extend redacted smoke results with additive fields:
+   `accepted_hypothesis_count`, `rejected_hypothesis_count`,
+   `rejection_categories`, `some_hypotheses_accepted`, `all_hypotheses_valid`,
+   `citation_ids_resolved`, `semantic_support_ok` — without removing existing
+   fields or conflating schema validity, citation-ID resolution, semantic
+   support, and compatibility.
+4. Do **not** add automatic model retries on citation/policy failure. Existing
+   bounded 429/5xx provider retries remain unchanged.
+5. Never include raw prompts, full model responses, API keys, or sensitive
+   evidence payloads in smoke diagnostics.
+
+**Consequences:** Offline/CI tests can assert rejection categories and prompt
+allowlist presence with fakes. Real-provider retests remain explicitly
+authorized and billable; this ADR does not authorize paid calls.
+
+**Alternatives considered:** Auto-retry on validation failure (rejected: cost);
+silently dropping rejected hypotheses to pass compatibility (rejected: honesty);
+relaxing causal/citation policy (rejected: evidence integrity).
+
 ## ADR-028: Real LLM provider validation (Milestone F2c)
 
 **Date:** 2026-10-12  
