@@ -28,6 +28,138 @@ Rules:
 
 ---
 
+## ADR-029: Databricks Delta + MLflow integration (Milestone F3b)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F3a emits local JSONL analytical exports. Operators need a
+reproducible path into Delta tables and MLflow evaluation lineage without making
+Databricks a core Perch dependency, without guessing incompatible schemas, and
+without implying cloud execution from unit tests.
+
+**Decision:**
+1. Add optional Python package `integrations/databricks` (`perch-pulse-dbx`) with
+   stdlib-first validate/dry-run/merge-plan; pin `databricks-sdk` and `mlflow` as
+   extras only.
+2. Reject unsupported `export_schema_version` instead of silent field mapping.
+3. Domain-isolate tables via schema suffixes (`*_observed`, `*_synthetic`,
+   `*_model`, `*_human`, `*_evaluation`) from `provenance_class`.
+4. Append-only MERGE on `(dedupe_key, content_fingerprint)` matching F3a history
+   lines; **never DELETE** when a key is absent from a newer export; never
+   UPDATE-collapse fingerprint history.
+5. Safe identifier allowlist; no untrusted SQL interpolation.
+6. MLflow logs metrics with explicit denominators; missing token/cost metrics are
+   unavailable (not zero). Artifacts are compact and redacted.
+7. Live paths require authorize flags + existing warehouse ID; default live action
+   is a connection check (`SELECT 1`), not an unstaged MERGE. Never auto-create
+   paid clusters. CI runs offline tests only.
+
+**Consequences:** Core `make verify` remains Go/Web. F3b CI is a lightweight
+Python job. Real Databricks/MLflow runs are reported honestly as NOT RUN unless
+authorized execution occurred.
+
+**Alternatives considered:** Embedding Spark in the Go binary (rejected: weight);
+Autoloader-only docs without executable offline path (rejected: unverifiable);
+auto-provisioning warehouses (rejected: cost/safety).
+
+## ADR-028: Real LLM provider validation (Milestone F2c)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F2a ships an OpenAI-compatible proposer validated only with
+`FakeClient` / `httptest`. F2b scores stored proposals offline. Operators need a
+reproducible compatibility smoke and a fixed evaluation corpus without implying
+live model quality from mocks, without paid calls in CI, and without relaxing
+citation or causation policy for model mistakes.
+
+**Decision:**
+1. Document a single compatible configuration: provider `openai_compatible`,
+   model `gpt-4o-mini`, `POST {base}/chat/completions` with
+   `response_format=json_object`.
+2. Add `perch pulse llm-provider-smoke` defaulting to **offline** fixture
+   validation; real calls require `--real-provider` **and**
+   `--i-authorize-provider-calls` plus server-side `PERCH_PULSE_LLM_*` env.
+3. Reject `finish_reason=length` / `max_tokens` as truncated incomplete output;
+   wrap HTTP client with bounded retries for 429/5xx only (never schema failures).
+4. Ship fixed F2c corpus (`pulse.investigation.eval.f2c_provider_corpus.v1`,
+   9 synthetic Astronomy Shop fixtures). Reuse F2b `eval.Run` for F1 vs LLM
+   comparison with explicit denominators; provenance class
+   `synthetic_evaluation_fixture` (not production).
+5. Attach optional human reviews (`pulse.investigation.human_review.v1`, rubric
+   `pulse.investigation.rubric.f2c.v1`); absent reviews → `not_evaluated`.
+6. Cost estimates only for the documented model using public list prices dated
+   in code; otherwise mark unavailable. Never fabricate latency/tokens/cost.
+
+**Consequences:** CI remains credential-free. Real provider validation is
+honestly reported as NOT RUN unless authorized calls execute. Semantic
+entailment remains a human/rubric concern, not a mechanical pass.
+
+**Alternatives considered:** Auto-calling providers in eval (rejected: cost);
+multi-vendor adapters in F2c (rejected: scope); relaxing citation policy for
+model errors (rejected: evidence integrity); inventing human reviews (rejected).
+
+## ADR-027: Databricks-ready investigation data pipeline (Milestone F3a)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F1–F2b produce local investigation, proposal, feedback, and offline
+evaluation records. Future Delta/MLflow work needs a reproducible export without
+provisioning Databricks, adding Spark/Parquet dependencies, or leaking secrets.
+
+**Decision:**
+1. Add `internal/pulse/export` projecting allowlisted fields into versioned JSONL
+   datasets (`pulse.export.analytics.v1`) with stable `dedupe_key` +
+   `content_fingerprint`, UTC timestamps, and explicit `provenance_class`.
+2. CLI `perch pulse export-analytics` performs incremental, resumable, idempotent
+   export with atomic JSONL writes and checkpoint advance only after successful
+   commit; path traversal/symlink escape rejected via `--allowed-root`.
+3. Keep observed evidence, inferred hypotheses, human feedback, and evaluation
+   labels in separate datasets; hash hypothesis statements; never export prompts,
+   raw logs, or credentials.
+4. Document F3b Delta MERGE / MLflow design in `docs/pulse-export.md` without
+   claiming cloud execution.
+
+**Consequences:** Local demos and CI can produce warehouse-shaped artifacts.
+F3b remains optional; core Perch does not depend on Databricks.
+
+**Alternatives considered:** Direct Spark/Parquet writers (rejected: heavy
+deps); watermark-only checkpoints without fingerprints (rejected: silent
+upsert drift); exporting full investigation JSON blobs (rejected: privacy and
+schema-noise risk).
+
+## ADR-026: Offline investigation evaluation harness (Milestone F2b)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F2a adds optional LLM proposals. We need reproducible comparison
+against F1 deterministic investigations on identical evidence without paid
+provider calls, ground-truth leakage into generation, or invented model scores.
+
+**Decision:**
+1. Versioned cases (`pulse.investigation.eval_case.v1`) separate
+   `generation` inputs, `annotations`, and `hidden_ground_truth`.
+2. Offline runner (`perch pulse investigation-eval`) scores mechanical metrics
+   with explicit denominators; default dataset is synthetic fixtures including
+   optional `synthetic_fixture` proposals.
+3. No LLM-as-judge. Semantic support uses a documented human rubric.
+4. Missing stored proposals → unavailable (not fabricated performance).
+5. Human feedback summaries are subjective usefulness only, never verified truth.
+
+**Consequences:** CI can run the harness without credentials. Live-provider eval
+remains an explicit future opt-in outside this milestone.
+
+**Alternatives considered:** Auto-calling providers during eval (rejected: cost/
+nondeterminism); treating feedback as ground truth (rejected: trust boundary);
+single blended score without denominators (rejected: score inflation risk).
+
 ## ADR-025: Constrained optional LLM investigator (Milestone F2a)
 
 **Date:** 2026-10-12  

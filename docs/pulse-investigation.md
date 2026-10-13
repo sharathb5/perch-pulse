@@ -1,4 +1,4 @@
-# Pulse Investigation (Milestone F1 + F2a)
+# Pulse Investigation (Milestones F1 + F2a + F2b + F2c)
 
 Evidence-backed investigation snapshots for Pulse incidents. **No LLM required for F1.**
 Investigations assemble bounded facts, explicit hypotheses, unknowns, and verification
@@ -6,7 +6,9 @@ steps. They do **not** confirm root causes or perform remediation.
 
 Optional Milestone F2a adds a constrained LLM proposer that emits a **separate**
 validated proposal (`pulse.investigation.proposal.v1`) without mutating F1 snapshots.
-See [ADR-023](DECISIONS.md) and [ADR-025](DECISIONS.md).
+F2b adds offline evaluation; F2c adds provider compatibility smoke and a fixed corpus.
+See [ADR-023](DECISIONS.md), [ADR-025](DECISIONS.md), [ADR-026](DECISIONS.md),
+and [ADR-028](DECISIONS.md).
 
 ## Concepts
 
@@ -139,12 +141,17 @@ Provider contract used: OpenAI-style `POST {base}/chat/completions` with
 `finish_reason`, `usage.prompt_tokens`, `usage.completion_tokens`, `id`, `model`.
 
 **Not tested against a live paid provider in CI.** Compatibility beyond this
-documented subset is unverified.
+documented subset is unverified unless an authorized F2c real-provider smoke
+reports `real_provider_executed=true`.
+
+**Documented F2c target:** `openai_compatible` + model `gpt-4o-mini`.
 
 **Usage bounds:** each request is bounded (`max_tokens`, payload/response size,
-timeout, concurrency). There is **no aggregate spend/token budget** across
-repeated POSTs — local loopback callers can invoke propose repeatedly. Operators
-who need spend caps should gate credentials or terminate the viz process.
+timeout, concurrency). Transient 429/5xx retries are bounded (default 3 attempts);
+schema/validation failures are never retried. Truncated completions
+(`finish_reason=length`) are rejected. There is **no aggregate spend/token budget**
+across repeated POSTs — local loopback callers can invoke propose repeatedly.
+Operators who need spend caps should gate credentials or terminate the viz process.
 
 **Validation honesty:** `support_status=validated` means citation IDs resolve and
 pass lexical policy checks. It does **not** prove the cited evidence entails the
@@ -162,15 +169,23 @@ correlation.
 ```bash
 perch pulse llm-status
 perch pulse llm-propose 'inv|…' --expected-fingerprint '…'
+
+# F2c provider smoke — offline by default (no network)
+perch pulse llm-provider-smoke --case-id case_payment_error --json
+
+# Real provider (billable): both flags required
+perch pulse llm-provider-smoke --case-id case_payment_error \
+  --real-provider --i-authorize-provider-calls --json
 ```
 
-F1 still ships `DeterministicProposer`. Future eval (F2b) can compare LLM proposals
-against this baseline + human feedback, optionally storing artifacts in
-Databricks/MLflow without making them required.
+F1 still ships `DeterministicProposer`. F2b/F2c compare LLM proposals against this
+baseline + optional human reviews. Databricks/MLflow remain optional (F3a/F3b).
 
-## Evaluation
+## Evaluation (F1 unit + F2b harness)
 
-Package `internal/pulse/investigation/eval` scores:
+Package `internal/pulse/investigation/eval` provides:
+
+**F1 unit scoring** (`Score` / `Pass`):
 
 - evidence citation coverage (every hypothesis must cite refs)
 - unresolved citation count (refs must resolve to source_references / symptoms / phases)
@@ -179,6 +194,32 @@ Package `internal/pulse/investigation/eval` scores:
 - uncertainty classification (`diagnosed=false`, unknowns present)
 - false causal attribution count
 - rerun consistency is asserted in unit tests via content fingerprint equality (not a `Pass` field)
+
+**F2b offline harness** (`BuiltinDataset`, `Run`, `perch pulse investigation-eval`):
+
+- versioned cases `pulse.investigation.eval_case.v1` with separated generation /
+  annotations / hidden ground truth
+- same-fingerprint comparison of deterministic F1 vs stored F2a proposals
+- mechanical method scores with explicit aggregate denominators
+- synthetic fixture proposals clearly labeled; missing proposals not scored as model quality
+- human rubric for semantic support (no LLM judge by default)
+- optional feedback summaries treated as subjective usefulness only
+
+**F2c additions** ([ADR-028](DECISIONS.md)):
+
+- fixed corpus `pulse.investigation.eval.f2c_provider_corpus.v1` (default `--dataset f2c`)
+- `perch pulse llm-provider-smoke` (offline default; real mode dual-flag gated)
+- human review attachment (`--reviews-dir`, schema `pulse.investigation.human_review.v1`)
+- dimensions without reviews are `not_evaluated` — never invented
+- mechanical citation checks ≠ semantic entailment; phrase heuristics ≠ reliable NLP
+
+See [ADR-026](DECISIONS.md), [ADR-028](DECISIONS.md), and
+`examples/astronomy-shop/eval/investigation/`.
+
+**F3a analytical export** (`perch pulse export-analytics`): versioned JSONL datasets
+for incidents, investigations, hypotheses, citations, feedback, proposals, and
+optional eval reports — local incremental checkpoint, no Databricks. See
+[pulse-export.md](pulse-export.md) and [ADR-027](DECISIONS.md).
 
 ## Security
 

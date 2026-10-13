@@ -4,7 +4,7 @@
 
 .PHONY: build web-build web-deps web-build-embed web-lint web-test web-e2e \
 	go-fmt go-vet go-test provider-validate security \
-	perch-regression pulse-integration \
+	perch-regression pulse-integration databricks-integration-test \
 	verify test lint run
 
 # Pin security scanners so the gate is reproducible across days.
@@ -59,6 +59,17 @@ pulse-integration:
 
 provider-validate:
 	go test ./internal/providerspec/... -count=1
+
+# Optional F3b offline Python tests (no Databricks/MLflow credentials).
+# Not part of `make verify` — separate CI job to keep the Go gate lean.
+# Uses a local venv under integrations/databricks/.venv (gitignored).
+databricks-integration-test:
+	cd integrations/databricks && \
+		python3 -m venv .venv && \
+		. .venv/bin/activate && \
+		python -m pip install -q -U pip && \
+		python -m pip install -q -e ".[test]" && \
+		python -m pytest
 
 security:
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -quiet -exclude=G304 ./...
