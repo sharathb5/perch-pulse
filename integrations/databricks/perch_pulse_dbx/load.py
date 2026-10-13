@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
 from .identifiers import UnsafeIdentifierError, require_identifier
 from .merge_plan import MergePlan, plan_merges
+from .stage import execute_staged_merges, verify_lineage_from_result
 from .validate import ExportValidation, domain_for_row, validate_export_dir
 
 
@@ -27,18 +29,13 @@ class FakeSQLExecutor:
     # table -> (dedupe_key, content_fingerprint) -> row
     row_store: dict[str, dict[tuple[str, str], dict[str, Any]]] = field(default_factory=dict)
 
-    def execute(self, statement: str, *, catalog: str | None = None, schema: str | None = None) -> dict[str, Any]:
-        _ = catalog, schema
-        self.statements.append(statement)
-        if self.fail_on_substring and self.fail_on_substring in statement:
-            raise RuntimeError("simulated SQL failure")
-        if statement.strip().upper().startswith("SELECT 1"):
-            return {"state": "SUCCEEDED", "data_array": [["1"]]}
-        if statement.strip().upper().startswith("SELECT COUNT"):
-            parts = statement.replace(";", "").split()
-            table = parts[-1]
-            n = len(self.row_store.get(table, {}))
-            return {"state": "SUCCEEDED", "data_array": [[str(n)]]}
+    def insert_rows(self, table: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+        """Land projected staging rows (used by stage.execute_staged_merges)."""
+        self.statements.append(f"-- insert_rows {table} n={len(rows)}")
+        store = self.row_store.setdefault(table, {})
+        for row in rows:
+            key = (str(row["dedupe_key"]), str(row["content_fingerprint"]))
+            store[key] = dict(row)
         return {"state": "SUCCEEDED"}
 
     def apply_merge_rows(self, target: str, rows: list[dict[str, Any]]) -> tuple[int, int]:
@@ -55,6 +52,79 @@ class FakeSQLExecutor:
                 inserted += 1
         return inserted, skipped
 
+    def execute(self, statement: str, *, catalog: str | None = None, schema: str | None = None) -> dict[str, Any]:
+        _ = catalog, schema
+        self.statements.append(statement)
+        if self.fail_on_substring and self.fail_on_substring in statement:
+            raise RuntimeError("simulated SQL failure")
+        stripped = statement.strip()
+        upper = stripped.upper()
+
+        if upper.startswith("SELECT 1"):
+            return {"state": "SUCCEEDED", "data_array": [["1"]]}
+        if upper.startswith("CREATE SCHEMA"):
+            return {"state": "SUCCEEDED"}
+        if upper.startswith("CREATE TABLE IF NOT EXISTS"):
+            table = self._table_from_ddl(stripped)
+            self.row_store.setdefault(table, {})
+            return {"state": "SUCCEEDED"}
+        if upper.startswith("CREATE OR REPLACE TABLE"):
+            m = re.match(
+                r"CREATE OR REPLACE TABLE\s+([A-Za-z0-9_.]+)",
+                stripped,
+                re.IGNORECASE,
+            )
+            if m:
+                self.row_store[m.group(1)] = {}
+            return {"state": "SUCCEEDED"}
+        if upper.startswith("INSERT INTO"):
+            m = re.match(r"INSERT INTO\s+([A-Za-z0-9_.]+)", stripped, re.IGNORECASE)
+            if m:
+                self.row_store.setdefault(m.group(1), {})
+            return {"state": "SUCCEEDED"}
+        if upper.startswith("MERGE INTO"):
+            m = re.match(
+                r"MERGE INTO\s+([A-Za-z0-9_.]+)\s+AS\s+t\s+USING\s+([A-Za-z0-9_.]+)",
+                stripped,
+                re.IGNORECASE,
+            )
+            if m:
+                target, staging = m.group(1), m.group(2)
+                staged = list(self.row_store.get(staging, {}).values())
+                self.apply_merge_rows(target, staged)
+            return {"state": "SUCCEEDED"}
+        if upper.startswith("SELECT COUNT"):
+            m = re.search(r"FROM\s+([A-Za-z0-9_.]+)", stripped, re.IGNORECASE)
+            table = m.group(1) if m else ""
+            n = len(self.row_store.get(table, {}))
+            return {"state": "SUCCEEDED", "data_array": [[str(n)]]}
+        if upper.startswith("SELECT DEDUPE_KEY"):
+            m = re.search(r"FROM\s+([A-Za-z0-9_.]+)", stripped, re.IGNORECASE)
+            table = m.group(1) if m else ""
+            pairs = sorted(self.row_store.get(table, {}).keys())[:5]
+            return {"state": "SUCCEEDED", "data_array": [[k, fp] for k, fp in pairs]}
+        if upper.startswith("DROP TABLE"):
+            m = re.match(
+                r"DROP TABLE IF EXISTS\s+([A-Za-z0-9_.]+)",
+                stripped,
+                re.IGNORECASE,
+            )
+            if m:
+                self.row_store.pop(m.group(1), None)
+            return {"state": "SUCCEEDED"}
+        return {"state": "SUCCEEDED"}
+
+    @staticmethod
+    def _table_from_ddl(statement: str) -> str:
+        m = re.search(
+            r"CREATE TABLE IF NOT EXISTS\s+([A-Za-z0-9_.]+)",
+            statement,
+            re.IGNORECASE,
+        )
+        if not m:
+            raise ValueError("could not parse table from DDL")
+        return m.group(1)
+
 
 @dataclass
 class LoadResult:
@@ -69,6 +139,8 @@ class LoadResult:
     live_connection_ok: bool = False
     rows_merged: bool = False
     notes: list[str] = field(default_factory=list)
+    stage: dict[str, Any] | None = None
+    lineage: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -82,6 +154,8 @@ class LoadResult:
             "problems": list(self.problems),
             "row_counts_after": dict(self.row_counts_after),
             "notes": list(self.notes),
+            "stage": self.stage,
+            "lineage": self.lineage,
             "plan": None if self.plan is None else self.plan.to_dict(),
         }
 
@@ -91,13 +165,15 @@ class LoadOptions:
     export_dir: str | Path
     catalog: str = "perch_pulse"
     base_schema: str = "analytics"
-    max_batch: int = 500
+    max_batch: int = 500  # SQL INSERT chunk size when staging
+    max_export_rows: int = 5000  # validation ceiling (separate from insert chunking)
     mode: str = "dry_run"  # dry_run | live_connection | live
     authorize_live: bool = False
     warehouse_id: str | None = None
     executor: SQLExecutor | None = None
     prior_fingerprints: dict[str, dict[str, str]] | None = None
     apply_fake_merges: bool = False
+    execute_merge: bool = False
 
 
 def load_export(opts: LoadOptions) -> LoadResult:
@@ -106,7 +182,7 @@ def load_export(opts: LoadOptions) -> LoadResult:
         "Retention-bounded exports are append-only by (dedupe_key, content_fingerprint).",
         "Missing keys never DELETE historical Delta rows.",
         "External systems do not provide exactly-once semantics.",
-        "Live row MERGE requires landed staging tables; connection checks alone do not load rows.",
+        "Connection checks alone do not load rows; use --execute-merge for staging+MERGE.",
     ]
     try:
         require_identifier(opts.catalog, kind="catalog")
@@ -121,7 +197,9 @@ def load_export(opts: LoadOptions) -> LoadResult:
             notes=notes,
         )
 
-    validation = validate_export_dir(opts.export_dir, max_batch=opts.max_batch)
+    # Validate against export-size ceiling; insert chunking uses max_batch separately.
+    export_row_limit = max(int(opts.max_export_rows), int(opts.max_batch), 1)
+    validation = validate_export_dir(opts.export_dir, max_batch=export_row_limit)
     plan = plan_merges(
         validation,
         catalog=opts.catalog,
@@ -145,6 +223,8 @@ def load_export(opts: LoadOptions) -> LoadResult:
         result.notes.append("dry_run: planned tables/operations only; no cloud execution")
         if opts.apply_fake_merges and isinstance(opts.executor, FakeSQLExecutor):
             _apply_fake(opts.executor, validation, plan, result)
+        elif opts.execute_merge and isinstance(opts.executor, FakeSQLExecutor):
+            _run_staged(opts.executor, validation, plan, result, max_batch=opts.max_batch)
         return result
 
     if opts.mode not in ("live", "live_connection"):
@@ -180,25 +260,40 @@ def load_export(opts: LoadOptions) -> LoadResult:
         result.ok = False
         return result
 
-    if opts.mode == "live_connection" or not isinstance(executor, FakeSQLExecutor):
-        # Real warehouses: do not execute MERGE against empty/unlanded staging tables.
+    want_merge = opts.execute_merge or opts.mode == "live"
+    if not want_merge:
         result.rows_merged = False
         result.ok = True
         result.notes.append(
             "live_connection: warehouse SELECT 1 succeeded; Delta MERGE not executed "
-            "because staging land (cloud object / temp table load) is a separate operator step"
+            "(pass --execute-merge to stage JSONL and MERGE)"
         )
-        if opts.mode == "live":
-            result.notes.append(
-                "Full live MERGE is not claimed here; land staging JSONL then run planned MERGE SQL"
-            )
         return result
 
-    # Fake executor path used by offline tests — apply in-memory append-only merges.
-    _apply_fake(executor, validation, plan, result)
+    _run_staged(executor, validation, plan, result, max_batch=opts.max_batch)
     result.live_executed = True
-    result.rows_merged = True
     return result
+
+
+def _run_staged(
+    executor: Any,
+    validation: ExportValidation,
+    plan: MergePlan,
+    result: LoadResult,
+    *,
+    max_batch: int,
+) -> None:
+    stage_res = execute_staged_merges(executor, validation, plan, max_batch=max_batch)
+    result.executed_statements += stage_res.executed_statements
+    result.rows_merged = stage_res.rows_merged
+    result.ok = stage_res.ok
+    result.problems.extend(stage_res.problems)
+    result.notes.extend(stage_res.notes)
+    result.stage = stage_res.to_dict()
+    result.lineage = verify_lineage_from_result(stage_res)
+    for op in stage_res.operations:
+        if op.count_after is not None:
+            result.row_counts_after[op.target_table] = op.count_after
 
 
 def _apply_fake(
@@ -221,7 +316,7 @@ def _apply_fake(
 class DatabricksSQLExecutor:
     """Thin wrapper around databricks-sdk statement execution (optional dependency)."""
 
-    def __init__(self, *, warehouse_id: str, wait_timeout: str = "30s") -> None:
+    def __init__(self, *, warehouse_id: str, wait_timeout: str = "50s") -> None:
         if not warehouse_id.strip():
             raise ValueError("DATABRICKS_WAREHOUSE_ID / warehouse_id is required for live mode")
         try:

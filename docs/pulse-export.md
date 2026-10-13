@@ -116,12 +116,16 @@ See [ADR-029](DECISIONS.md). **Core Perch does not import this package.**
 cd integrations/databricks && pip install -e ".[test]"
 python -m perch_pulse_dbx validate --export-dir ../../examples/pulse-export/sample/export
 python -m perch_pulse_dbx dry-run --export-dir ../../examples/pulse-export/sample/export --json
+python -m perch_pulse_dbx dry-run --export-dir ../../examples/pulse-export/sample/export --simulate-merge --json
+python -m perch_pulse_dbx verify-lineage --export-dir ../../examples/pulse-export/sample/export --json
 python -m perch_pulse_dbx mlflow-log --report ../../examples/pulse-export/sample/eval-report.json --json
 make -C ../.. databricks-integration-test
 ```
 
 Live Databricks/MLflow requires explicit authorize flags and an existing warehouse.
-F3a still does **not** perform Delta/MLflow execution by itself.
+Use `live-load --execute-merge` for staging+MERGE+lineage; `--connection-only`
+is SELECT 1 only (`rows_merged=false`). F3a still does **not** perform
+Delta/MLflow execution by itself.
 
 ---
 
@@ -146,35 +150,29 @@ cloud credentials in this repository.**
 
 ### Loading JSONL into Delta
 
-1. Land versioned export directories as cloud objects (`s3://…/pulse_export/v1/dt=…/`).
-2. Autoloader / `COPY INTO` / `spark.read.json` → staging tables matching F3a schemas.
-3. Enforce `export_schema_version` gate before MERGE.
+**Implemented path** (`perch_pulse_dbx` with `--execute-merge`): validate export →
+CREATE SCHEMA/TABLE → `stg_*` land from JSONL batches → append-only MERGE on
+`(dedupe_key, content_fingerprint)` → COUNT/sample-key lineage.
+
+**Alternate operator path:** land versioned export dirs as cloud objects, then
+Autoloader / `COPY INTO` into staging before the same MERGE keys.
 
 ### Suggested keys
 
-| Delta table | PK / merge keys |
+| Delta table | Merge keys |
 |-------------|-----------------|
-| `pulse_incidents` | `incident_id` + `content_fingerprint` |
-| `pulse_incident_signals` | `dedupe_key` |
-| `pulse_investigations` | `investigation_id` |
-| `pulse_hypotheses` | `dedupe_key` |
-| `pulse_citations` | `dedupe_key` |
-| `pulse_investigation_feedback` | `dedupe_key` |
-| `pulse_proposals` | `proposal_id` |
-| `pulse_eval_runs` | `eval_run_id` |
-| `pulse_eval_case_results` | `eval_run_id`, `case_id` |
+| all `pulse_*` datasets | `(dedupe_key, content_fingerprint)` append-only |
 
 ### Incremental MERGE
 
 ```sql
 MERGE INTO pulse_investigations t
-USING staged_investigations s
-ON t.investigation_id = s.investigation_id
-WHEN MATCHED AND t.content_fingerprint <> s.content_fingerprint THEN UPDATE SET *
+USING stg_pulse_investigations s
+ON t.dedupe_key = s.dedupe_key
+AND t.content_fingerprint = s.content_fingerprint
 WHEN NOT MATCHED THEN INSERT *
+-- absence never DELETE; fingerprint history retained
 ```
-
-Prefer append-only history + current view if mutable incident upserts must retain lineage.
 
 ### Provenance / lineage
 

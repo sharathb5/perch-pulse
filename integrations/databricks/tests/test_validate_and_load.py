@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -156,3 +157,110 @@ def test_live_requires_authorization():
 def test_unsafe_catalog_rejected():
     res = load_export(LoadOptions(export_dir=SAMPLE, catalog="bad-name", mode="dry_run"))
     assert not res.ok
+
+
+def test_staged_merge_and_idempotent_rerun():
+    fake = FakeSQLExecutor()
+    first = load_export(
+        LoadOptions(
+            export_dir=SAMPLE,
+            mode="dry_run",
+            executor=fake,
+            execute_merge=True,
+            max_batch=20,
+        )
+    )
+    assert first.ok, first.problems
+    assert first.rows_merged
+    assert first.lineage and first.lineage.get("ok")
+    assert first.row_counts_after
+    counts1 = dict(first.row_counts_after)
+
+    second = load_export(
+        LoadOptions(
+            export_dir=SAMPLE,
+            mode="dry_run",
+            executor=fake,
+            execute_merge=True,
+            max_batch=20,
+        )
+    )
+    assert second.ok, second.problems
+    assert second.row_counts_after == counts1
+    # Staging land + MERGE statements were recorded.
+    assert any("MERGE INTO" in s for s in fake.statements)
+    assert any(s.startswith("-- insert_rows") for s in fake.statements)
+
+
+def test_connection_only_does_not_claim_merge():
+    fake = FakeSQLExecutor()
+    res = load_export(
+        LoadOptions(
+            export_dir=SAMPLE,
+            mode="live_connection",
+            authorize_live=True,
+            executor=fake,
+            execute_merge=False,
+        )
+    )
+    assert res.ok
+    assert res.live_connection_ok
+    assert not res.rows_merged
+    assert any("MERGE not executed" in n for n in res.notes)
+
+
+def test_live_execute_merge_with_fake():
+    fake = FakeSQLExecutor()
+    res = load_export(
+        LoadOptions(
+            export_dir=SAMPLE,
+            mode="live",
+            authorize_live=True,
+            executor=fake,
+            execute_merge=True,
+            max_batch=50,
+        )
+    )
+    assert res.ok, res.problems
+    assert res.live_connection_ok
+    assert res.rows_merged
+    assert res.lineage and res.lineage.get("append_only") is True
+
+
+def test_insert_batch_chunks_without_export_reject():
+    """max_batch is insert chunk size; export may be larger when max_export_rows allows."""
+    fake = FakeSQLExecutor()
+    res = load_export(
+        LoadOptions(
+            export_dir=SAMPLE,
+            mode="dry_run",
+            executor=fake,
+            execute_merge=True,
+            max_batch=3,
+            max_export_rows=500,
+        )
+    )
+    assert res.ok, res.problems
+    assert res.rows_merged
+    insert_stmts = [s for s in fake.statements if s.startswith("-- insert_rows")]
+    assert len(insert_stmts) >= 2  # eval_case_results (15) needs multiple chunks of 3
+
+
+def test_staging_tables_use_unique_suffix():
+    fake = FakeSQLExecutor()
+    res = load_export(
+        LoadOptions(
+            export_dir=SAMPLE,
+            mode="dry_run",
+            executor=fake,
+            execute_merge=True,
+            max_batch=50,
+        )
+    )
+    assert res.ok
+    staging = {
+        op["staging_table"]
+        for op in (res.stage or {}).get("operations", [])
+    }
+    assert staging
+    assert all(re.search(r"\.stg_.+_[a-f0-9]{8}$", t) for t in staging)

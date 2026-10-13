@@ -54,10 +54,14 @@ cd integrations/databricks
 python -m perch_pulse_dbx validate --export-dir ../../examples/pulse-export/sample/export --json
 python -m perch_pulse_dbx dry-run --export-dir ../../examples/pulse-export/sample/export --json
 python -m perch_pulse_dbx dry-run --export-dir ../../examples/pulse-export/sample/export --out /tmp/merge-plan.json
+# Offline staging + MERGE simulation (FakeSQLExecutor; no cloud):
+python -m perch_pulse_dbx dry-run --export-dir ../../examples/pulse-export/sample/export --simulate-merge --json
+python -m perch_pulse_dbx verify-lineage --export-dir ../../examples/pulse-export/sample/export --json
 ```
 
 Dry-run emits planned tables, validated counts, merge keys, and SQL previews.
-It does **not** invent cloud cost.
+`--simulate-merge` / `verify-lineage` exercise the same staging→MERGE→readback path
+in memory (idempotent rerun). They do **not** invent cloud success or cost.
 
 ### 3) Offline MLflow logging (fake client)
 
@@ -83,6 +87,23 @@ export DATABRICKS_HOST=https://…cloud.databricks.com
 export DATABRICKS_TOKEN=…          # never commit
 export DATABRICKS_WAREHOUSE_ID=…
 
+# Connection-only (default): SELECT 1 — does NOT claim rows_merged
+python -m perch_pulse_dbx live-load \
+  --export-dir ../../examples/pulse-export/sample/export \
+  --warehouse-id "$DATABRICKS_WAREHOUSE_ID" \
+  --i-authorize-databricks-calls \
+  --connection-only \
+  --json
+
+# Full staging + append-only MERGE + lineage readback (bounded batch):
+python -m perch_pulse_dbx live-load \
+  --export-dir ../../examples/pulse-export/sample/export \
+  --warehouse-id "$DATABRICKS_WAREHOUSE_ID" \
+  --i-authorize-databricks-calls \
+  --execute-merge \
+  --max-batch 50 \
+  --json
+
 python -m perch_pulse_dbx live-smoke \
   --export-dir ../../examples/pulse-export/sample/export \
   --report ../../examples/pulse-export/sample/eval-report.json \
@@ -91,11 +112,13 @@ python -m perch_pulse_dbx live-smoke \
   --warehouse-id "$DATABRICKS_WAREHOUSE_ID" \
   --i-authorize-databricks-calls \
   --i-authorize-mlflow-calls \
+  --execute-merge \
   --max-batch 50 \
   --json
 ```
 
-Without authorize flags, live steps are reported **NOT RUN**.
+Without authorize flags, live steps are reported **NOT RUN**.  
+Without `--execute-merge`, report **LIVE DELTA INGESTION = NOT RUN** even if `SELECT 1` succeeded.
 
 ## Architecture
 
@@ -104,7 +127,7 @@ F3a JSONL export
   → validate schemas / provenance / checkpoint
   → dry-run MERGE plan (domain-isolated schemas)
   → [opt-in] warehouse connection check (SELECT 1)
-  → [operator] land staging tables, then run planned append-only MERGE
+  → [opt-in --execute-merge] CREATE SCHEMA/TABLE → stage stg_* → MERGE → COUNT/key readback
   → [opt-in] MLflow eval metrics + redacted artifact
 ```
 
@@ -136,8 +159,11 @@ Synthetic ground truth must never be fed back into agent generation inputs.
 - Same key + new fingerprint → INSERT a new history row (matches F3a JSONL lines)
 - New key → INSERT
 - **Missing key in new export → NOT DELETE**
-- Live `live-load` / `live-smoke` verify warehouse connectivity; they do **not**
-  claim rows were MERGEd unless staging was landed and MERGE executed by the operator
+- `live-load --connection-only` / default live-smoke without `--execute-merge`:
+  connectivity only (`rows_merged=false`)
+- `live-load --execute-merge`: lands `stg_*` tables from JSONL batches, runs
+  append-only MERGE, records count/key lineage (`rows_merged=true` only on success)
+- Offline `verify-lineage` simulates that path with FakeSQLExecutor (not cloud)
 
 ### MLflow
 
