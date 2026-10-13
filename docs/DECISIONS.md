@@ -28,6 +28,40 @@ Rules:
 
 ---
 
+## ADR-029: Databricks Delta + MLflow integration (Milestone F3b)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F3a emits local JSONL analytical exports. Operators need a
+reproducible path into Delta tables and MLflow evaluation lineage without making
+Databricks a core Perch dependency, without guessing incompatible schemas, and
+without implying cloud execution from unit tests.
+
+**Decision:**
+1. Add optional Python package `integrations/databricks` (`perch-pulse-dbx`) with
+   stdlib-first validate/dry-run/merge-plan; pin `databricks-sdk` and `mlflow` as
+   extras only.
+2. Reject unsupported `export_schema_version` instead of silent field mapping.
+3. Domain-isolate tables via schema suffixes (`*_observed`, `*_synthetic`,
+   `*_model`, `*_human`, `*_evaluation`) from `provenance_class`.
+4. MERGE on `dedupe_key` with fingerprint change detection; **never DELETE** when
+   a key is absent from a newer export.
+5. Safe identifier allowlist; no untrusted SQL interpolation.
+6. MLflow logs metrics with explicit denominators; missing token/cost metrics are
+   unavailable (not zero). Artifacts are compact and redacted.
+7. Live warehouse/MLflow execution requires explicit authorize flags + existing
+   warehouse ID; never auto-create paid clusters. CI runs offline tests only.
+
+**Consequences:** Core `make verify` remains Go/Web. F3b CI is a lightweight
+Python job. Real Databricks/MLflow runs are reported honestly as NOT RUN unless
+authorized execution occurred.
+
+**Alternatives considered:** Embedding Spark in the Go binary (rejected: weight);
+Autoloader-only docs without executable offline path (rejected: unverifiable);
+auto-provisioning warehouses (rejected: cost/safety).
+
 ## ADR-028: Real LLM provider validation (Milestone F2c)
 
 **Date:** 2026-10-12  

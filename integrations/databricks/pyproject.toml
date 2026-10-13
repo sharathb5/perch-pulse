@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perch-pulse-dbx"
+version = "0.1.0"
+description = "Optional Databricks Delta + MLflow loader for Perch Pulse F3a JSONL exports"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Perch Pulse contributors" }]
+# Core package is stdlib-only. Cloud SDKs are optional extras.
+dependencies = []
+
+[project.optional-dependencies]
+databricks = [
+  "databricks-sdk==0.67.0",
+]
+mlflow = [
+  "mlflow==2.22.1",
+]
+all = [
+  "perch-pulse-dbx[databricks,mlflow]",
+]
+test = [
+  "pytest==8.4.2",
+]
+
+[project.scripts]
+perch-pulse-dbx = "perch_pulse_dbx.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["perch_pulse_dbx*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
