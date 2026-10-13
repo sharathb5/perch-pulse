@@ -103,7 +103,8 @@ Without authorize flags, live steps are reported **NOT RUN**.
 F3a JSONL export
   → validate schemas / provenance / checkpoint
   → dry-run MERGE plan (domain-isolated schemas)
-  → [opt-in] staging + Delta MERGE upsert
+  → [opt-in] warehouse connection check (SELECT 1)
+  → [operator] land staging tables, then run planned append-only MERGE
   → [opt-in] MLflow eval metrics + redacted artifact
 ```
 
@@ -130,11 +131,13 @@ Synthetic ground truth must never be fed back into agent generation inputs.
 
 ### MERGE semantics
 
-- Keys: `dedupe_key` (+ `content_fingerprint` for change detection)
+- Keys: `(dedupe_key, content_fingerprint)` — append-only fingerprint history
 - Same key + same fingerprint → skip (idempotent)
-- Same key + new fingerprint → UPDATE
+- Same key + new fingerprint → INSERT a new history row (matches F3a JSONL lines)
 - New key → INSERT
 - **Missing key in new export → NOT DELETE**
+- Live `live-load` / `live-smoke` verify warehouse connectivity; they do **not**
+  claim rows were MERGEd unless staging was landed and MERGE executed by the operator
 
 ### MLflow
 
@@ -160,6 +163,7 @@ make databricks-integration-test
 - No string interpolation of row payloads into SQL in the planner
 - No automatic cluster/warehouse creation
 - No automatic cleanup of shared Unity Catalog objects
-- Live calls require dual authorization flags
+- Live calls require authorization flags; connection checks ≠ data load
+- No invented cloud cost figures in dry-run output
 
 See ADR-029 and `docs/pulse-export.md`.

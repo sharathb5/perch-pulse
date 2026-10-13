@@ -18,7 +18,7 @@ class MergeOperation:
     staging_table: str
     merge_keys: list[str]
     insert_count: int
-    update_count: int  # same key, different fingerprint
+    update_count: int  # always 0 under append-only fingerprint history
     skip_identical_count: int
     sample_dedupe_keys: list[str] = field(default_factory=list)
     sql_preview: str = ""
@@ -60,10 +60,11 @@ class MergePlan:
         }
 
 
-def merge_keys_for(dataset: str) -> list[str]:
-    # Always merge on dedupe_key; fingerprint distinguishes content revisions.
-    # Never DELETE historical rows when a key is absent from a new export.
-    return ["dedupe_key"]
+def merge_keys_for(_dataset: str) -> list[str]:
+    # F3a emits a new JSONL line when content_fingerprint changes for the same
+    # dedupe_key. Warehouse ingest is append-only history: match both columns.
+    # Never UPDATE-collapse fingerprint history; never DELETE on absence.
+    return ["dedupe_key", "content_fingerprint"]
 
 
 def build_merge_sql(target: str, staging: str) -> str:
@@ -71,10 +72,10 @@ def build_merge_sql(target: str, staging: str) -> str:
     return (
         f"MERGE INTO {target} AS t\n"
         f"USING {staging} AS s\n"
-        f"ON t.dedupe_key = s.dedupe_key\n"
-        f"WHEN MATCHED AND t.content_fingerprint <> s.content_fingerprint THEN UPDATE SET *\n"
+        f"ON t.dedupe_key = s.dedupe_key "
+        f"AND t.content_fingerprint = s.content_fingerprint\n"
         f"WHEN NOT MATCHED THEN INSERT *\n"
-        f"-- NOTE: absence of a key in the new export must NOT DELETE historical rows"
+        f"-- Append-only: fingerprint history is retained; absence never DELETEs"
     )
 
 
@@ -88,7 +89,7 @@ def plan_merges(
     """Build a dry-run MERGE plan from a validated export.
 
     prior_fingerprints: optional map dataset -> {dedupe_key: content_fingerprint}
-    representing what is already known in the warehouse (for idempotency preview).
+    representing one known fingerprint per key (preview only).
     """
     plan = MergePlan(
         catalog=catalog,
@@ -96,10 +97,11 @@ def plan_merges(
         export_schema_version=validation.export_schema_version or "",
         notes=[
             "Dry-run plan only — no Databricks API calls are made by plan_merges.",
-            "MERGE is upsert/append by dedupe_key; missing keys never become DELETE.",
+            "MERGE is append-only on (dedupe_key, content_fingerprint).",
+            "Missing keys never become DELETE; fingerprint changes insert a new row.",
             "Synthetic and observed rows land in separate schema suffixes.",
-            "Idempotency is best-effort for external systems; re-runs with identical "
-            "fingerprints skip updates.",
+            "Idempotency is best-effort for external systems; identical key+fingerprint skips.",
+            "Estimated statement counts exclude unlanded staging file ingestion.",
         ],
     )
     if not validation.ok:
@@ -127,7 +129,6 @@ def plan_merges(
 
             known = prior.get(dataset, {})
             insert_n = 0
-            update_n = 0
             skip_n = 0
             samples: list[str] = []
             for row in domain_rows:
@@ -136,12 +137,11 @@ def plan_merges(
                 if len(samples) < 5:
                     samples.append(key)
                 prev = known.get(key)
-                if prev is None:
-                    insert_n += 1
-                elif prev == fp:
+                if prev == fp:
                     skip_n += 1
                 else:
-                    update_n += 1
+                    # New key, or new fingerprint for existing key → insert history row.
+                    insert_n += 1
 
             op = MergeOperation(
                 dataset=dataset,
@@ -150,13 +150,13 @@ def plan_merges(
                 staging_table=staging,
                 merge_keys=merge_keys_for(dataset),
                 insert_count=insert_n,
-                update_count=update_n,
+                update_count=0,
                 skip_identical_count=skip_n,
                 sample_dedupe_keys=samples,
                 sql_preview=build_merge_sql(target, staging),
             )
             plan.operations.append(op)
 
-    # One CREATE SCHEMA (best-effort) + CREATE staging + MERGE + optional COUNT per op.
-    plan.estimated_statement_count = len(plan.operations) * 3
+    # Schema ensure + MERGE per op (staging land is a separate prerequisite).
+    plan.estimated_statement_count = len(plan.operations) * 2
     return plan

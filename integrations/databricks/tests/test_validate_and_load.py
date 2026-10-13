@@ -120,20 +120,30 @@ def test_dry_run_plan_and_idempotent_fake_load():
         assert len(fake.row_store.get(table, {})) == n
 
 
-def test_changed_fingerprint_updates():
+def test_changed_fingerprint_appends_history():
     fake = FakeSQLExecutor()
     validation = validate_export_dir(SAMPLE)
     load_export(
         LoadOptions(export_dir=SAMPLE, mode="dry_run", executor=fake, apply_fake_merges=True)
     )
-    # Mutate one fingerprint in memory store then reload same key with new fp via apply.
     table = next(iter(fake.row_store))
     key = next(iter(fake.row_store[table]))
     old = fake.row_store[table][key]
+    before = len(fake.row_store[table])
     new_row = dict(old)
     new_row["content_fingerprint"] = "ff" * 32
-    inserted, updated = fake.apply_merge_rows(table, [new_row])
-    assert inserted == 0 and updated == 1
+    inserted, skipped = fake.apply_merge_rows(table, [new_row])
+    assert inserted == 1 and skipped == 0
+    assert len(fake.row_store[table]) == before + 1
+
+
+def test_merge_sql_is_append_only():
+    validation = validate_export_dir(SAMPLE)
+    plan = plan_merges(validation, catalog="perch_pulse", base_schema="analytics")
+    for op in plan.operations:
+        assert op.merge_keys == ["dedupe_key", "content_fingerprint"]
+        assert "WHEN NOT MATCHED THEN INSERT" in op.sql_preview
+        assert "THEN UPDATE" not in op.sql_preview.upper()
 
 
 def test_live_requires_authorization():

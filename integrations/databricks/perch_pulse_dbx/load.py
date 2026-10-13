@@ -1,4 +1,4 @@
-"""Delta load orchestration — dry-run by default; live SQL warehouse opt-in."""
+"""Delta load orchestration — dry-run by default; live paths are explicit."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any, Protocol
 
 from .identifiers import UnsafeIdentifierError, require_identifier
 from .merge_plan import MergePlan, plan_merges
-from .validate import ExportValidation, validate_export_dir
+from .validate import ExportValidation, domain_for_row, validate_export_dir
 
 
 class SQLExecutor(Protocol):
@@ -24,17 +24,17 @@ class FakeSQLExecutor:
 
     statements: list[str] = field(default_factory=list)
     fail_on_substring: str | None = None
-    row_store: dict[str, dict[str, dict[str, Any]]] = field(default_factory=dict)
-    # table -> dedupe_key -> row
+    # table -> (dedupe_key, content_fingerprint) -> row
+    row_store: dict[str, dict[tuple[str, str], dict[str, Any]]] = field(default_factory=dict)
 
     def execute(self, statement: str, *, catalog: str | None = None, schema: str | None = None) -> dict[str, Any]:
         _ = catalog, schema
         self.statements.append(statement)
         if self.fail_on_substring and self.fail_on_substring in statement:
             raise RuntimeError("simulated SQL failure")
-        # Parse minimal MERGE/SELECT COUNT for idempotency tests.
+        if statement.strip().upper().startswith("SELECT 1"):
+            return {"state": "SUCCEEDED", "data_array": [["1"]]}
         if statement.strip().upper().startswith("SELECT COUNT"):
-            # COUNT(*) FROM catalog.schema.table
             parts = statement.replace(";", "").split()
             table = parts[-1]
             n = len(self.row_store.get(table, {}))
@@ -42,21 +42,18 @@ class FakeSQLExecutor:
         return {"state": "SUCCEEDED"}
 
     def apply_merge_rows(self, target: str, rows: list[dict[str, Any]]) -> tuple[int, int]:
-        """Simulate MERGE semantics for tests."""
+        """Simulate append-only MERGE on (dedupe_key, content_fingerprint)."""
         store = self.row_store.setdefault(target, {})
         inserted = 0
-        updated = 0
+        skipped = 0
         for row in rows:
-            key = str(row["dedupe_key"])
-            fp = str(row["content_fingerprint"])
-            prev = store.get(key)
-            if prev is None:
+            key = (str(row["dedupe_key"]), str(row["content_fingerprint"]))
+            if key in store:
+                skipped += 1
+            else:
                 store[key] = dict(row)
                 inserted += 1
-            elif prev.get("content_fingerprint") != fp:
-                store[key] = dict(row)
-                updated += 1
-        return inserted, updated
+        return inserted, skipped
 
 
 @dataclass
@@ -69,6 +66,8 @@ class LoadResult:
     problems: list[str] = field(default_factory=list)
     row_counts_after: dict[str, int] = field(default_factory=dict)
     live_executed: bool = False
+    live_connection_ok: bool = False
+    rows_merged: bool = False
     notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -78,6 +77,8 @@ class LoadResult:
             "validation_ok": self.validation_ok,
             "executed_statements": self.executed_statements,
             "live_executed": self.live_executed,
+            "live_connection_ok": self.live_connection_ok,
+            "rows_merged": self.rows_merged,
             "problems": list(self.problems),
             "row_counts_after": dict(self.row_counts_after),
             "notes": list(self.notes),
@@ -91,20 +92,21 @@ class LoadOptions:
     catalog: str = "perch_pulse"
     base_schema: str = "analytics"
     max_batch: int = 500
-    mode: str = "dry_run"  # dry_run | live
+    mode: str = "dry_run"  # dry_run | live_connection | live
     authorize_live: bool = False
     warehouse_id: str | None = None
     executor: SQLExecutor | None = None
     prior_fingerprints: dict[str, dict[str, str]] | None = None
-    # When using FakeSQLExecutor, apply in-memory merges for idempotency tests.
     apply_fake_merges: bool = False
 
 
 def load_export(opts: LoadOptions) -> LoadResult:
     notes = [
         "Core Perch does not require Databricks.",
-        "Retention-bounded exports are upsert/append only — never DELETE on absence.",
-        "External systems do not provide exactly-once semantics; re-runs are versioned/idempotent best-effort.",
+        "Retention-bounded exports are append-only by (dedupe_key, content_fingerprint).",
+        "Missing keys never DELETE historical Delta rows.",
+        "External systems do not provide exactly-once semantics.",
+        "Live row MERGE requires landed staging tables; connection checks alone do not load rows.",
     ]
     try:
         require_identifier(opts.catalog, kind="catalog")
@@ -145,7 +147,7 @@ def load_export(opts: LoadOptions) -> LoadResult:
             _apply_fake(opts.executor, validation, plan, result)
         return result
 
-    if opts.mode != "live":
+    if opts.mode not in ("live", "live_connection"):
         result.problems.append(f"unknown mode {opts.mode!r}")
         return result
 
@@ -159,32 +161,43 @@ def load_export(opts: LoadOptions) -> LoadResult:
             executor = DatabricksSQLExecutor(
                 warehouse_id=opts.warehouse_id or os.environ.get("DATABRICKS_WAREHOUSE_ID", ""),
             )
-        except Exception as exc:  # noqa: BLE001 — surface setup errors without traceback secrets
-            result.problems.append(f"databricks client unavailable: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            result.problems.append(f"databricks client unavailable: {type(exc).__name__}")
             result.notes.append(
                 "Install optional extra: pip install '.[databricks]' and configure "
                 "DATABRICKS_HOST / DATABRICKS_TOKEN / DATABRICKS_WAREHOUSE_ID"
             )
             return result
 
-    # Live path: create schemas, stage via VALUES batches (bounded), MERGE, count.
-    # Staging uses parameterized approach via JSON VOLUME when available; here we
-    # execute MERGE SQL with pre-validated identifiers only.
+    # Connection probe — never claim rows_merged from this alone.
     try:
-        for op in plan.operations:
-            create_schema = f"CREATE SCHEMA IF NOT EXISTS {op.target_table.rsplit('.', 1)[0]}"
-            executor.execute(create_schema)
-            result.executed_statements += 1
-            # Staging table DDL + load is environment-specific; emit MERGE preview
-            # only when fake apply is used. Live smoke uses a bounded subset path.
-            executor.execute(op.sql_preview)
-            result.executed_statements += 1
+        executor.execute("SELECT 1")
+        result.executed_statements += 1
+        result.live_connection_ok = True
         result.live_executed = True
-        result.ok = True
-        result.notes.append("live SQL statements submitted to configured warehouse")
     except Exception as exc:  # noqa: BLE001
-        result.problems.append(f"load failed: {exc}")
+        result.problems.append(f"connection check failed: {type(exc).__name__}")
         result.ok = False
+        return result
+
+    if opts.mode == "live_connection" or not isinstance(executor, FakeSQLExecutor):
+        # Real warehouses: do not execute MERGE against empty/unlanded staging tables.
+        result.rows_merged = False
+        result.ok = True
+        result.notes.append(
+            "live_connection: warehouse SELECT 1 succeeded; Delta MERGE not executed "
+            "because staging land (cloud object / temp table load) is a separate operator step"
+        )
+        if opts.mode == "live":
+            result.notes.append(
+                "Full live MERGE is not claimed here; land staging JSONL then run planned MERGE SQL"
+            )
+        return result
+
+    # Fake executor path used by offline tests — apply in-memory append-only merges.
+    _apply_fake(executor, validation, plan, result)
+    result.live_executed = True
+    result.rows_merged = True
     return result
 
 
@@ -195,22 +208,14 @@ def _apply_fake(
     result: LoadResult,
 ) -> None:
     for op in plan.operations:
-        rows = [
-            r
-            for r in validation.datasets.get(op.dataset, [])
-            if True  # domain already partitioned in plan; filter by matching schema suffix
-        ]
-        # Filter rows belonging to this domain.
-        from .validate import domain_for_row
-
+        rows = validation.datasets.get(op.dataset, [])
         domain_rows = [r for r in rows if domain_for_row(r) == op.domain]
-        inserted, updated = executor.apply_merge_rows(op.target_table, domain_rows)
+        executor.apply_merge_rows(op.target_table, domain_rows)
         executor.execute(op.sql_preview)
         result.executed_statements += 1
         result.row_counts_after[op.target_table] = len(executor.row_store.get(op.target_table, {}))
-        _ = inserted, updated
     result.ok = True
-    result.notes.append("fake executor applied in-memory MERGE semantics for offline tests")
+    result.notes.append("fake executor applied in-memory append-only MERGE semantics for offline tests")
 
 
 class DatabricksSQLExecutor:
@@ -251,7 +256,6 @@ class DatabricksSQLExecutor:
 
 
 def redacted_preview(plan: MergePlan) -> str:
-    """Human-readable dry-run summary without secrets."""
     lines = [
         f"catalog={plan.catalog} base_schema={plan.base_schema}",
         f"export_schema={plan.export_schema_version}",

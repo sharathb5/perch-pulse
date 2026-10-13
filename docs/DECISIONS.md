@@ -46,13 +46,15 @@ without implying cloud execution from unit tests.
 2. Reject unsupported `export_schema_version` instead of silent field mapping.
 3. Domain-isolate tables via schema suffixes (`*_observed`, `*_synthetic`,
    `*_model`, `*_human`, `*_evaluation`) from `provenance_class`.
-4. MERGE on `dedupe_key` with fingerprint change detection; **never DELETE** when
-   a key is absent from a newer export.
+4. Append-only MERGE on `(dedupe_key, content_fingerprint)` matching F3a history
+   lines; **never DELETE** when a key is absent from a newer export; never
+   UPDATE-collapse fingerprint history.
 5. Safe identifier allowlist; no untrusted SQL interpolation.
 6. MLflow logs metrics with explicit denominators; missing token/cost metrics are
    unavailable (not zero). Artifacts are compact and redacted.
-7. Live warehouse/MLflow execution requires explicit authorize flags + existing
-   warehouse ID; never auto-create paid clusters. CI runs offline tests only.
+7. Live paths require authorize flags + existing warehouse ID; default live action
+   is a connection check (`SELECT 1`), not an unstaged MERGE. Never auto-create
+   paid clusters. CI runs offline tests only.
 
 **Consequences:** Core `make verify` remains Go/Web. F3b CI is a lightweight
 Python job. Real Databricks/MLflow runs are reported honestly as NOT RUN unless

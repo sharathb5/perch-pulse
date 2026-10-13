@@ -32,13 +32,22 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--out", default="", help="Write plan JSON to this path")
     d.add_argument("--json", action="store_true")
 
-    live = sub.add_parser("live-load", help="Live warehouse load (requires authorization)")
+    live = sub.add_parser(
+        "live-load",
+        help="Live warehouse connection check + plan (requires authorization; does not invent staged MERGEs)",
+    )
     live.add_argument("--export-dir", required=True)
     live.add_argument("--catalog", default="perch_pulse")
     live.add_argument("--schema", default="analytics", dest="base_schema")
     live.add_argument("--warehouse-id", default="")
     live.add_argument("--i-authorize-databricks-calls", action="store_true")
     live.add_argument("--max-batch", type=int, default=50)
+    live.add_argument(
+        "--connection-only",
+        action="store_true",
+        default=True,
+        help="Only verify warehouse connectivity (default; does not MERGE unlanded staging)",
+    )
     live.add_argument("--json", action="store_true")
 
     m = sub.add_parser("mlflow-log", help="Log an investigation-eval report to MLflow (fake by default)")
@@ -114,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                 catalog=args.catalog,
                 base_schema=args.base_schema,
                 max_batch=args.max_batch,
-                mode="live",
+                mode="live_connection",
                 authorize_live=bool(args.i_authorize_databricks_calls),
                 warehouse_id=args.warehouse_id or None,
             )
@@ -122,7 +131,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(result.to_dict(), indent=2))
         else:
-            print(f"ok={result.ok} live_executed={result.live_executed} statements={result.executed_statements}")
+            print(
+                f"ok={result.ok} live_connection_ok={result.live_connection_ok} "
+                f"rows_merged={result.rows_merged} statements={result.executed_statements}"
+            )
             for p in result.problems:
                 print(f"problem: {p}", file=sys.stderr)
         return 0 if result.ok else 2
@@ -150,8 +162,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "live-smoke":
         # Always validate + dry-run first. Live steps only with explicit auth.
         summary: dict = {"steps": []}
+        ok = True
         val = validate_export_dir(args.export_dir, max_batch=args.max_batch)
         summary["steps"].append({"step": "validate", "ok": val.ok, "counts": val.counts})
+        ok = ok and val.ok
         dry = load_export(
             LoadOptions(
                 export_dir=args.export_dir,
@@ -162,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         summary["steps"].append({"step": "dry_run", "ok": dry.ok, "plan": dry.plan.to_dict() if dry.plan else None})
+        ok = ok and dry.ok
         if not args.i_authorize_databricks_calls:
             summary["live_databricks"] = "NOT RUN — missing --i-authorize-databricks-calls"
         else:
@@ -171,13 +186,23 @@ def main(argv: list[str] | None = None) -> int:
                     catalog=args.catalog,
                     base_schema=args.base_schema,
                     max_batch=args.max_batch,
-                    mode="live",
+                    mode="live_connection",
                     authorize_live=True,
                     warehouse_id=args.warehouse_id or None,
                 )
             )
-            summary["steps"].append({"step": "live_load", "ok": live.ok, "live_executed": live.live_executed})
-            summary["live_databricks"] = "EXECUTED" if live.live_executed else "FAILED_OR_SKIPPED"
+            summary["steps"].append(
+                {
+                    "step": "live_connection",
+                    "ok": live.ok,
+                    "live_connection_ok": live.live_connection_ok,
+                    "rows_merged": live.rows_merged,
+                }
+            )
+            summary["live_databricks"] = (
+                "CONNECTION_OK" if live.live_connection_ok else "FAILED_OR_SKIPPED"
+            )
+            ok = ok and live.ok
         if args.report:
             if not args.i_authorize_mlflow_calls:
                 summary["mlflow"] = "NOT RUN — missing --i-authorize-mlflow-calls"
@@ -185,11 +210,8 @@ def main(argv: list[str] | None = None) -> int:
                 mres = log_eval_report(args.report, live=True, experiment="perch-pulse-investigation-eval")
                 summary["steps"].append({"step": "mlflow", "ok": mres.ok, "run_id": mres.run_id})
                 summary["mlflow"] = "EXECUTED" if mres.live_executed else "FAILED_OR_SKIPPED"
-        if args.json:
-            print(json.dumps(summary, indent=2))
-        else:
-            print(json.dumps(summary, indent=2))
-        ok = val.ok and dry.ok
+                ok = ok and mres.ok
+        print(json.dumps(summary, indent=2))
         return 0 if ok else 2
 
     return 2
