@@ -28,6 +28,37 @@ Rules:
 
 ---
 
+## ADR-027: Databricks-ready investigation data pipeline (Milestone F3a)
+
+**Date:** 2026-10-12  
+**Status:** Accepted  
+**Issue:** #17
+
+**Context:** F1–F2b produce local investigation, proposal, feedback, and offline
+evaluation records. Future Delta/MLflow work needs a reproducible export without
+provisioning Databricks, adding Spark/Parquet dependencies, or leaking secrets.
+
+**Decision:**
+1. Add `internal/pulse/export` projecting allowlisted fields into versioned JSONL
+   datasets (`pulse.export.analytics.v1`) with stable `dedupe_key` +
+   `content_fingerprint`, UTC timestamps, and explicit `provenance_class`.
+2. CLI `perch pulse export-analytics` performs incremental, resumable, idempotent
+   export with atomic JSONL writes and checkpoint advance only after successful
+   commit; path traversal/symlink escape rejected via `--allowed-root`.
+3. Keep observed evidence, inferred hypotheses, human feedback, and evaluation
+   labels in separate datasets; hash hypothesis statements; never export prompts,
+   raw logs, or credentials.
+4. Document F3b Delta MERGE / MLflow design in `docs/pulse-export.md` without
+   claiming cloud execution.
+
+**Consequences:** Local demos and CI can produce warehouse-shaped artifacts.
+F3b remains optional; core Perch does not depend on Databricks.
+
+**Alternatives considered:** Direct Spark/Parquet writers (rejected: heavy
+deps); watermark-only checkpoints without fingerprints (rejected: silent
+upsert drift); exporting full investigation JSON blobs (rejected: privacy and
+schema-noise risk).
+
 ## ADR-026: Offline investigation evaluation harness (Milestone F2b)
 
 **Date:** 2026-10-12  

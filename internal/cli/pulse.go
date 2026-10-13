@@ -13,6 +13,7 @@ import (
 	pulseapi "github.com/yashg4509/perch/internal/pulse/api"
 	"github.com/yashg4509/perch/internal/pulse/change"
 	"github.com/yashg4509/perch/internal/pulse/correlate"
+	"github.com/yashg4509/perch/internal/pulse/export"
 	"github.com/yashg4509/perch/internal/pulse/incident"
 	"github.com/yashg4509/perch/internal/pulse/investigation"
 	"github.com/yashg4509/perch/internal/pulse/investigation/eval"
@@ -36,6 +37,7 @@ func newPulseCmd() *cobra.Command {
 	cmd.AddCommand(newPulseLLMStatusCmd())
 	cmd.AddCommand(newPulseLLMProposeCmd())
 	cmd.AddCommand(newPulseInvestigationEvalCmd())
+	cmd.AddCommand(newPulseExportAnalyticsCmd())
 	return cmd
 }
 
@@ -435,6 +437,78 @@ func newPulseInvestigationEvalCmd() *cobra.Command {
 	cmd.Flags().String("out-dir", "", "Write report.json and report.md under this directory")
 	cmd.Flags().Bool("json", false, "Print report JSON to stdout (default: markdown summary)")
 	return cmd
+}
+
+func newPulseExportAnalyticsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "export-analytics",
+		Short: "Incrementally export investigation analytics JSONL (local; no Databricks)",
+		Args:  cobra.NoArgs,
+		RunE:  runPulseExportAnalytics,
+	}
+	cmd.Flags().String("out-dir", "", "Export directory for versioned JSONL + checkpoint (required)")
+	cmd.Flags().String("allowed-root", "", "Reject out-dir outside this root (default: cwd)")
+	cmd.Flags().Int("max-batch", export.DefaultMaxBatchRecords, "Max new rows per run across datasets")
+	cmd.Flags().String("eval-report", "", "Optional investigation-eval report.json to include")
+	cmd.Flags().String("incident-provenance", string(export.ProvenanceObservedLocal),
+		"Provenance class for pulse-dir incidents/investigations (observed_local|historical_demo|synthetic_fixture|unknown)")
+	cmd.Flags().Bool("inventory", false, "Print data inventory markdown and exit")
+	cmd.Flags().Bool("json", false, "Print export result JSON")
+	return cmd
+}
+
+func runPulseExportAnalytics(cmd *cobra.Command, _ []string) error {
+	if inv, _ := cmd.Flags().GetBool("inventory"); inv {
+		_, err := fmt.Fprint(cmd.OutOrStdout(), export.InventoryMarkdown())
+		return err
+	}
+	outDir, _ := cmd.Flags().GetString("out-dir")
+	if strings.TrimSpace(outDir) == "" {
+		return fmt.Errorf("export-analytics: --out-dir is required")
+	}
+	dir, err := pulseDataDir(cmd)
+	if err != nil {
+		return err
+	}
+	allowed, _ := cmd.Flags().GetString("allowed-root")
+	maxBatch, _ := cmd.Flags().GetInt("max-batch")
+	evalReport, _ := cmd.Flags().GetString("eval-report")
+	prov, _ := cmd.Flags().GetString("incident-provenance")
+	res, err := export.Run(export.Options{
+		PulseDir:           dir,
+		OutDir:             outDir,
+		AllowedRoot:        allowed,
+		MaxBatchRecords:    maxBatch,
+		EvalReportPath:     evalReport,
+		IncidentProvenance: export.ProvenanceClass(prov),
+	})
+	if err != nil {
+		return err
+	}
+	asJSON, _ := cmd.Flags().GetBool("json")
+	if asJSON {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(res)
+	}
+	_, err = fmt.Fprintf(cmd.OutOrStdout(),
+		"export_schema=%s\nout=%s\nbytes≈%d\nbatch_capped=%v\ncheckpoint=%s\nquality=%s\n",
+		res.ExportSchema, res.ExportDir, res.BytesWritten, res.BatchCapped, res.CheckpointPath, res.QualityReportPath)
+	if err != nil {
+		return err
+	}
+	for _, ds := range export.SupportedDatasets {
+		added := res.RowsAdded[ds]
+		skipped := res.RowsSkipped[ds]
+		if added == 0 && skipped == 0 {
+			continue
+		}
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s: added=%d skipped_idempotent=%d\n", ds, added, skipped)
+	}
+	if len(res.CorruptSkipped) > 0 {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "corrupt_skipped=%d\n", len(res.CorruptSkipped))
+	}
+	return nil
 }
 
 func runPulseInvestigationEval(cmd *cobra.Command, _ []string) error {

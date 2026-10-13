@@ -1,0 +1,59 @@
+{
+  "schema_version": "pulse.export.manifest.v1",
+  "export_schema_version": "pulse.export.analytics.v1",
+  "exported_at": "2026-10-12T20:00:00Z",
+  "pulse_dir_note": "local FileStore read-only; sources not hashed for privacy",
+  "datasets": [
+    {
+      "name": "incidents",
+      "row_count": 1,
+      "file": "incidents.jsonl"
+    },
+    {
+      "name": "incident_signals",
+      "row_count": 2,
+      "file": "incident_signals.jsonl"
+    },
+    {
+      "name": "investigations",
+      "row_count": 1,
+      "file": "investigations.jsonl"
+    },
+    {
+      "name": "hypotheses",
+      "row_count": 4,
+      "file": "hypotheses.jsonl"
+    },
+    {
+      "name": "citations",
+      "row_count": 10,
+      "file": "citations.jsonl"
+    },
+    {
+      "name": "investigation_feedback",
+      "row_count": 2,
+      "file": "investigation_feedback.jsonl"
+    },
+    {
+      "name": "proposals",
+      "row_count": 1,
+      "file": "proposals.jsonl"
+    },
+    {
+      "name": "eval_runs",
+      "row_count": 1,
+      "file": "eval_runs.jsonl"
+    },
+    {
+      "name": "eval_case_results",
+      "row_count": 15,
+      "file": "eval_case_results.jsonl"
+    }
+  ],
+  "limitations": [
+    "F3a produces local JSONL only; no Databricks/Delta load is performed.",
+    "Hypothesis statement text is hashed, not exported.",
+    "Provider prompts/responses and raw logs are never exported.",
+    "Synthetic eval rows must not be joined as live incidents without provenance filters."
+  ]
+}
