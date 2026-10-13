@@ -46,34 +46,50 @@ type SmokeOptions struct {
 
 // SmokeResult is a redacted compatibility summary — never includes secrets,
 // full prompts, or unredacted incident payloads.
+//
+// Field semantics (do not conflate):
+//   - schema_valid: model JSON parsed and proposal content invariants passed
+//   - some_hypotheses_accepted: ≥1 hypothesis passed citation/policy validation
+//   - all_hypotheses_valid: zero rejected hypotheses (vacuous if model emitted none)
+//   - citations_resolved: strict gate — all hypotheses valid AND ≥1 accepted
+//   - citation_ids_resolved: no invalid_evidence_id / missing_citation rejections
+//   - semantic_support_ok: no citation_support_unverified rejections; accepted are validated
+//   - compatibility_ok: schema + fingerprint + citations_resolved + no error
 type SmokeResult struct {
-	SchemaVersion        string   `json:"schema_version"`
-	Mode                 string   `json:"mode"`
-	CaseID               string   `json:"case_id,omitempty"`
-	InvestigationID      string   `json:"investigation_id"`
-	EvidenceFingerprint  string   `json:"evidence_fingerprint"`
-	FingerprintValidated bool     `json:"fingerprint_validated"`
-	ProposalID           string   `json:"proposal_id,omitempty"`
-	Persisted            bool     `json:"persisted"`
-	SchemaValid          bool     `json:"schema_valid"`
-	CitationsResolved    bool     `json:"citations_resolved"`
-	SupportStatus        string   `json:"support_status,omitempty"`
-	Provider             string   `json:"provider"`
-	Model                string   `json:"model,omitempty"`
-	EndpointHost         string   `json:"endpoint_host,omitempty"`
-	FinishReason         string   `json:"finish_reason,omitempty"`
-	LatencyMS            int64    `json:"latency_ms"`
-	PromptTokens         int      `json:"prompt_tokens,omitempty"`
-	CompletionTokens     int      `json:"completion_tokens,omitempty"`
-	EstimatedCostUSD     *float64 `json:"estimated_cost_usd,omitempty"`
-	CostEstimateNote     string   `json:"cost_estimate_note,omitempty"`
-	RealProviderExecuted bool     `json:"real_provider_executed"`
-	CompatibilityOK      bool     `json:"compatibility_ok"`
-	RedactedSummary      string   `json:"redacted_summary"`
-	HypothesisCount      int      `json:"hypothesis_count"`
-	ValidationNotes      []string `json:"validation_notes,omitempty"`
-	Limitations          []string `json:"limitations"`
-	Error                string   `json:"error,omitempty"`
+	SchemaVersion           string   `json:"schema_version"`
+	Mode                    string   `json:"mode"`
+	CaseID                  string   `json:"case_id,omitempty"`
+	InvestigationID         string   `json:"investigation_id"`
+	EvidenceFingerprint     string   `json:"evidence_fingerprint"`
+	FingerprintValidated    bool     `json:"fingerprint_validated"`
+	ProposalID              string   `json:"proposal_id,omitempty"`
+	Persisted               bool     `json:"persisted"`
+	SchemaValid             bool     `json:"schema_valid"`
+	CitationsResolved       bool     `json:"citations_resolved"`
+	CitationIDsResolved     bool     `json:"citation_ids_resolved"`
+	SemanticSupportOK       bool     `json:"semantic_support_ok"`
+	SomeHypothesesAccepted  bool     `json:"some_hypotheses_accepted"`
+	AllHypothesesValid      bool     `json:"all_hypotheses_valid"`
+	AcceptedHypothesisCount int      `json:"accepted_hypothesis_count"`
+	RejectedHypothesisCount int      `json:"rejected_hypothesis_count"`
+	RejectionCategories     []string `json:"rejection_categories,omitempty"`
+	SupportStatus           string   `json:"support_status,omitempty"`
+	Provider                string   `json:"provider"`
+	Model                   string   `json:"model,omitempty"`
+	EndpointHost            string   `json:"endpoint_host,omitempty"`
+	FinishReason            string   `json:"finish_reason,omitempty"`
+	LatencyMS               int64    `json:"latency_ms"`
+	PromptTokens            int      `json:"prompt_tokens,omitempty"`
+	CompletionTokens        int      `json:"completion_tokens,omitempty"`
+	EstimatedCostUSD        *float64 `json:"estimated_cost_usd,omitempty"`
+	CostEstimateNote        string   `json:"cost_estimate_note,omitempty"`
+	RealProviderExecuted    bool     `json:"real_provider_executed"`
+	CompatibilityOK         bool     `json:"compatibility_ok"`
+	RedactedSummary         string   `json:"redacted_summary"`
+	HypothesisCount         int      `json:"hypothesis_count"` // accepted count (backward compatible)
+	ValidationNotes         []string `json:"validation_notes,omitempty"`
+	Limitations             []string `json:"limitations"`
+	Error                   string   `json:"error,omitempty"`
 }
 
 // RunProviderSmoke exercises the F2a propose pipeline against one investigation.
@@ -256,25 +272,63 @@ func runSmokeValidateOnly(ctx context.Context, inv investigation.Investigation, 
 func fillSmokeFromProposal(res SmokeResult, prop Proposal) SmokeResult {
 	res.ProposalID = prop.ProposalID
 	res.SchemaValid = true
-	res.CitationsResolved = len(prop.RejectedHypotheses) == 0 && len(prop.Hypotheses) > 0
+	res.AcceptedHypothesisCount = len(prop.Hypotheses)
+	res.RejectedHypothesisCount = len(prop.RejectedHypotheses)
+	res.HypothesisCount = res.AcceptedHypothesisCount // backward-compatible alias
+	res.SomeHypothesesAccepted = res.AcceptedHypothesisCount > 0
+	res.AllHypothesesValid = res.RejectedHypothesisCount == 0
+	// Strict compatibility gate (unchanged meaning): every hypothesis accepted.
+	res.CitationsResolved = res.AllHypothesesValid && res.SomeHypothesesAccepted
+	res.RejectionCategories = CollectRejectionCategories(prop.RejectedHypotheses)
+	// citation_ids_resolved: every evaluated hypothesis passed allowlist citation-ID
+	// checks (citation checks run before language policy). False when any hyp failed
+	// missing/invalid evidence IDs, or when no hypotheses were emitted.
+	totalHyps := res.AcceptedHypothesisCount + res.RejectedHypothesisCount
+	res.CitationIDsResolved = totalHyps > 0 &&
+		!HasRejectionCategory(res.RejectionCategories, RejectionInvalidEvidenceID) &&
+		!HasRejectionCategory(res.RejectionCategories, RejectionMissingCitation)
+	// semantic_support_ok: only claim support when the full proposal passed validation
+	// (support heuristic actually ran for every hypothesis). Partial/rejected → false.
+	semanticOK := res.AllHypothesesValid && res.SomeHypothesesAccepted &&
+		!HasRejectionCategory(res.RejectionCategories, RejectionCitationSupportUnverified)
+	if semanticOK {
+		for _, h := range prop.Hypotheses {
+			if h.SupportStatus != "validated" {
+				semanticOK = false
+				break
+			}
+		}
+	}
+	res.SemanticSupportOK = semanticOK
 	if len(prop.Hypotheses) > 0 {
 		res.SupportStatus = prop.Hypotheses[0].SupportStatus
 	} else if len(prop.RejectedHypotheses) > 0 {
 		res.SupportStatus = "unverified"
+	}
+	if res.RejectedHypothesisCount > 0 && res.AcceptedHypothesisCount == 0 {
 		res.Error = "no accepted hypotheses after citation/policy validation"
+	} else if res.RejectedHypothesisCount > 0 && res.AcceptedHypothesisCount > 0 {
+		// Partial acceptance is visible but must not pass the strict gate.
+		res.Error = fmt.Sprintf(
+			"partial acceptance: %d accepted, %d rejected (%s)",
+			res.AcceptedHypothesisCount, res.RejectedHypothesisCount,
+			strings.Join(res.RejectionCategories, ","),
+		)
 	}
 	res.Model = prop.Provenance.Model
 	res.EndpointHost = prop.Provenance.EndpointHost
 	res.FinishReason = prop.Provenance.FinishReason
 	res.PromptTokens = prop.Provenance.PromptUsageUnits
 	res.CompletionTokens = prop.Provenance.CompleteUsageUnits
-	res.HypothesisCount = len(prop.Hypotheses)
 	res.ValidationNotes = append([]string{}, prop.ValidationNotes...)
 	res.CompatibilityOK = res.SchemaValid && res.FingerprintValidated && res.CitationsResolved && res.Error == ""
 	res.RedactedSummary = fmt.Sprintf(
-		"mode=%s case=%s inv=%s fp=%s schema_valid=%v hyps=%d support=%s latency_ms=%d tokens=%d/%d real=%v",
+		"mode=%s case=%s inv=%s fp=%s schema_valid=%v accepted=%d rejected=%d categories=%s citations_resolved=%v citation_ids_resolved=%v semantic_support_ok=%v support=%s latency_ms=%d tokens=%d/%d real=%v",
 		res.Mode, emptyDash(res.CaseID), res.InvestigationID, shortFP(res.EvidenceFingerprint),
-		res.SchemaValid, res.HypothesisCount, emptyDash(res.SupportStatus), res.LatencyMS,
+		res.SchemaValid, res.AcceptedHypothesisCount, res.RejectedHypothesisCount,
+		emptyDash(strings.Join(res.RejectionCategories, ",")),
+		res.CitationsResolved, res.CitationIDsResolved, res.SemanticSupportOK,
+		emptyDash(res.SupportStatus), res.LatencyMS,
 		res.PromptTokens, res.CompletionTokens, res.RealProviderExecuted,
 	)
 	if cost, note, ok := EstimateCostUSD(res.Model, res.PromptTokens, res.CompletionTokens); ok {
@@ -317,7 +371,10 @@ func smokeLimitations(mode SmokeMode) []string {
 	out := []string{
 		"Compatibility smoke verifies schema/citation pipeline — not semantic entailment.",
 		"Citation ID resolution ≠ proof that cited evidence supports the claim wording.",
+		"Partial hypothesis acceptance still fails the strict compatibility gate.",
+		"rejection_categories are redacted validator labels — not full model transcripts.",
 		"Adversarial metadata in evidence remains untrusted input to the model.",
+		"No automatic model retry on citation/policy validation failure.",
 		"No autonomous remediation is performed.",
 	}
 	if mode == SmokeModeOffline {
