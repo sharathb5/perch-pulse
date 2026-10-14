@@ -14,7 +14,9 @@ Databricks Delta tables and logs investigation-evaluation runs to MLflow.
 | `live-load` / `live-smoke` | opt-in | only with explicit authorize flags |
 | `mlflow-log --live` | opt-in | only with `--i-authorize-mlflow-calls` |
 
-Do not claim cloud execution unless `live_executed=true` was observed.
+Do not claim cloud execution unless `live_executed=true` / `rows_merged=true` was observed for that run.
+
+**Dated live demo validation (2026-10-13):** authorized load of the 37-row sample export into `workspace.analytics_*` on warehouse `e988309748ef6ac6`, identical-rerun counts unchanged, and MLflow run `193935ec502f4496a5a7a1fc44118f6f` under `/Users/sharathjb23@gmail.com/perch-pulse-investigation-eval`. Details: [`docs/verification-matrix.md`](../../docs/verification-matrix.md#2026-10-13--live-databricks-delta--mlflow-demo-sample). Demo/synthetic data only — not production telemetry or live-model quality.
 
 ## Install
 

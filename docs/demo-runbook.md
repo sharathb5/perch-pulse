@@ -125,6 +125,8 @@ PULSE_DEMO_EXECUTE_MERGE=1 ./scripts/demo/pulse-demo.sh …
 
 Without flags: **LIVE DELTA INGESTION = NOT RUN**, **LIVE MLFLOW TRACKING = NOT RUN**.
 
+Dated one-time live PASS (demo sample only): **2026-10-13** — see [`verification-matrix.md`](verification-matrix.md#2026-10-13--live-databricks-delta--mlflow-demo-sample). Do not re-run paid cloud paths without a fresh authorization budget.
+
 ---
 
 ## Aftercare
