@@ -26,7 +26,6 @@ otel-collector
 load-generator
 prometheus
 EOF
-  # http_ok_map: exact URLs that should succeed
   cat >"$dir/http_ok_map" <<EOF
 http://127.0.0.1:8080/
 http://127.0.0.1:8080/loadgen/
@@ -37,6 +36,7 @@ http://127.0.0.1:8080/jaeger/ui/api/services
 http://127.0.0.1:9090/-/ready
 http://127.0.0.1:3131/
 http://127.0.0.1:3131/api/pulse/live/status
+http://127.0.0.1:3132/healthz
 EOF
   cat >"$dir/prom_query.json" <<'EOF'
 {"status":"success","data":{"resultType":"vector","result":[{"metric":{"service_name":"payment"},"value":[1.0,"0.12"]}]}}
@@ -68,6 +68,10 @@ EOF
   ]
 }
 EOF
+  # Default astronomy graph — required by verify_astronomy_graph on demo-up.
+  cat >"$dir/graph_local.json" <<'EOF'
+{"appName":"perch-astronomy-shop","environment":"local","nodes":[{"id":"payment"},{"id":"checkout"},{"id":"frontend"},{"id":"cart"}]}
+EOF
   echo "$dir"
 }
 
@@ -78,6 +82,7 @@ run_cmd() {
     DEMO_RECORDING_FIXTURE_DIR="$fixture" \
     DEMO_STATE_DIR="$fixture/state" \
     DEMO_VIZ_PORT=3131 \
+    DEMO_METRICS_PORT=3132 \
     "$SCRIPT" "$@"
 }
 
@@ -112,7 +117,6 @@ pass "status missing payment telemetry"
 # --- up refuses without shop + without approval ---
 f="$(setup_fixture no_shop)"
 : >"$f/containers_running"
-# remove storefront from ok map
 grep -v '8080/$' "$f/http_ok_map" >"$f/http_ok_map.tmp" || true
 mv "$f/http_ok_map.tmp" "$f/http_ok_map"
 if DEMO_APPROVE_SHOP_START=0 run_cmd "$f" up >"$TMP/up_refuse.log" 2>&1; then
@@ -124,20 +128,32 @@ pass "up refuses without shop approval"
 # --- up reuses healthy shop and starts mock viz (no fault) ---
 f="$(setup_fixture up_ok)"
 run_cmd "$f" up >"$TMP/up_ok.log" 2>&1
-grep -q 'reusing containers\|already healthy\|LIVE mode' "$TMP/up_ok.log" || fail "expected reuse/live log"
+grep -q 'reusing containers\|already healthy\|LIVE mode' "$TMP/up_ok.log" || fail "expected reuse/live log: $(cat "$TMP/up_ok.log")"
 grep -q 'does NOT inject a fault' "$TMP/up_ok.log" || fail "expected no-fault note"
 grep -q 'owner=demo-recording' "$f/state/viz.meta" || fail "expected ownership meta"
-# fault must remain OFF
+grep -q 'env=local' "$TMP/up_ok.log" || fail "expected ?env=local URL guidance"
+grep -q 'payment' "$TMP/up_ok.log" || grep -q 'Payment metrics' "$TMP/up_ok.log" || fail "expected payment metrics URL"
 st="$(run_cmd "$f" status 2>/dev/null)"
 echo "$st" | grep -q 'Fault injection: OFF' || fail "up must not inject fault"
 pass "up reuses shop and starts owned viz without fault"
+
+# --- up fails when graph is UI mock seed (github/vercel) ---
+f="$(setup_fixture graph_mock)"
+cat >"$f/graph_local.json" <<'EOF'
+{"appName":"demo","environment":"production","nodes":[{"id":"github"},{"id":"vercel"},{"id":"render"},{"id":"supabase"}]}
+EOF
+if run_cmd "$f" up >"$TMP/up_mock.log" 2>&1; then
+  fail "up should fail when graph is mock seed"
+fi
+grep -qi 'mock\|Astronomy Shop graph\|github/vercel\|FAIL' "$TMP/up_mock.log" \
+  || fail "expected mock-graph failure message: $(cat "$TMP/up_mock.log")"
+pass "up refuses GitHub/Vercel mock graph seed"
 
 # --- fault refuses when baseline warming ---
 f="$(setup_fixture fault_warm)"
 cat >"$f/live_status.json" <<'EOF'
 {"status":{"enabled":true,"available":true,"state":"warming_up"}}
 EOF
-# seed owned viz so viz_http_ready passes via http_ok_map
 run_cmd "$f" up >/dev/null 2>&1 || true
 if run_cmd "$f" fault >"$TMP/fault_warm.log" 2>&1; then
   fail "fault should refuse while warming"
@@ -175,17 +191,13 @@ pass "down disables fault and stops owned viz"
 
 # --- unrelated / external viz safety ---
 f="$(setup_fixture external_viz)"
-# Pretend port is occupied with Live Pulse but not owned — up should leave alone
-# by detecting http_ok + live enabled without meta ownership path.
-# Force ownership external by writing marker after a partial setup:
 mkdir -p "$f/state"
 echo "external" >"$f/state/viz_ownership"
-# Simulate alive external by ensuring http works; no pid file
 run_cmd "$f" down >"$TMP/down_ext.log" 2>&1
 grep -q 'external — not stopping\|external' "$TMP/down_ext.log" || fail "should not stop external viz"
 pass "down refuses to stop external viz"
 
-# --- disk check on status path still reports when docker mock fails ---
+# --- status NOT READY when shop down ---
 f="$(setup_fixture docker_bad)"
 echo "0" >"$f/docker_ok"
 : >"$f/containers_running"

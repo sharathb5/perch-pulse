@@ -66,10 +66,16 @@ func runViz(cmd *cobra.Command, args []string) error {
 	_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "# → Building graph from perch.yaml...")
 	addr := net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", port))
 	baseURL := fmt.Sprintf("http://localhost:%d", port)
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "# → Perch UI running at %s\n", baseURL)
+	// Pass --env into the SPA so the navbar does not default to "production"
+	// (which leaves the GitHub/Vercel mock graph when that env is absent).
+	uiEntry := baseURL + "/"
+	if defaultEnv != "" {
+		uiEntry = baseURL + "/?env=" + url.QueryEscape(defaultEnv)
+	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "# → Perch UI running at %s\n", uiEntry)
 	_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "# → Opening browser...")
 
-	go openBrowser(baseURL + "/")
+	go openBrowser(uiEntry)
 
 	// go:embed all:dist exposes paths as dist/index.html, dist/assets/..., not index.html at root.
 	uiFS, err := fs.Sub(webdist.Dist, "dist")

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Perch demo — payment spanmetrics (live Prometheus)</title>
+  <style>
+    :root { color-scheme: light; font-family: ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 1.5rem; background: #f6f7f9; color: #111; }
+    h1 { font-size: 1.15rem; margin: 0 0 0.25rem; }
+    .sub { color: #555; font-size: 0.85rem; margin-bottom: 1rem; }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; }
+    .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+    .value { font-size: 1.75rem; font-variant-numeric: tabular-nums; margin-top: 0.35rem; }
+    .meta { margin-top: 1rem; font-size: 0.8rem; color: #6b7280; }
+    .err { color: #b91c1c; white-space: pre-wrap; }
+    code { font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <h1>Payment service — live OpenTelemetry spanmetrics</h1>
+  <p class="sub">
+    Reads <strong>real</strong> samples from local Prometheus (<code id="prom"></code>).
+    Auto-refresh 5s. Not a Grafana replacement — recording secondary window when Grafana is overloaded.
+  </p>
+  <div class="grid">
+    <div class="card">
+      <div class="label">Call rate (per sec, 2m)</div>
+      <div class="value" id="rate">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Error rate (ratio, 2m)</div>
+      <div class="value" id="errors">—</div>
+    </div>
+    <div class="card">
+      <div class="label">p99 latency ms (2m)</div>
+      <div class="value" id="p99">—</div>
+    </div>
+  </div>
+  <p class="meta" id="meta">Waiting for first sample…</p>
+  <p class="err" id="err"></p>
+  <script>
+    // Default '' = same-origin proxy from payment_metrics_server.py (avoids Prometheus CORS).
+    // Override with ?prom=http://127.0.0.1:9090 only if the Prom UI allows CORS.
+    const PROM = new URLSearchParams(location.search).get('prom') || ''
+    document.getElementById('prom').textContent = PROM || (location.origin + ' (proxy)')
+
+    const Q = {
+      rate: 'sum by (service_name) (rate(traces_span_metrics_calls_total{service_name="payment"}[2m]))',
+      errors: 'sum by (service_name) (increase(traces_span_metrics_calls_total{service_name="payment",status_code="STATUS_CODE_ERROR"}[2m])) / clamp_min(sum by (service_name) (increase(traces_span_metrics_calls_total{service_name="payment"}[2m])), 1)',
+      p99: 'histogram_quantile(0.99, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name="payment"}[2m])))',
+    }
+
+    function fmt(v) {
+      if (v === '' || v == null || Number.isNaN(Number(v))) return 'MISSING'
+      const n = Number(v)
+      if (Math.abs(n) >= 1) return n.toFixed(3)
+      return n.toFixed(4)
+    }
+
+    async function query(expr) {
+      const base = PROM || location.origin
+      const u = new URL('/api/v1/query', base)
+      u.searchParams.set('query', expr)
+      const res = await fetch(u)
+      if (!res.ok) throw new Error('Prometheus HTTP ' + res.status)
+      const body = await res.json()
+      if (body.status !== 'success') throw new Error('Prometheus query failed')
+      const result = (body.data && body.data.result) || []
+      if (!result.length) return ''
+      const val = result[0].value
+      return Array.isArray(val) ? val[1] : ''
+    }
+
+    async function tick() {
+      const err = document.getElementById('err')
+      err.textContent = ''
+      try {
+        const [rate, errors, p99] = await Promise.all([query(Q.rate), query(Q.errors), query(Q.p99)])
+        document.getElementById('rate').textContent = fmt(rate)
+        document.getElementById('errors').textContent = fmt(errors)
+        document.getElementById('p99').textContent = fmt(p99)
+        document.getElementById('meta').textContent =
+          'Last refresh ' + new Date().toISOString() +
+          (rate === '' ? ' — payment series MISSING (is load-generator running?)' : ' — samples OK')
+      } catch (e) {
+        err.textContent = String(e.message || e) +
+          '\nIf this page was opened as file://, serve it via Perch/demo URLs or open Prometheus graph links instead (CORS).'
+      }
+    }
+
+    tick()
+    setInterval(tick, 5000)
+  </script>
+</body>
+</html>

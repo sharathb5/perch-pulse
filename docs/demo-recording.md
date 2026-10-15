@@ -35,16 +35,24 @@ Related: narrative script [`demo-script.md`](demo-script.md), broader orchestrat
 
 | Window | Role |
 |--------|------|
-| **Main** | Perch viz — service graph + Pulse sidebar (`http://127.0.0.1:3131/` by default) |
-| **Secondary** | Grafana Spanmetrics **or** Prometheus graphs for payment call/error rate |
+| **Main** | Perch viz — Astronomy Shop graph + Pulse sidebar (`http://127.0.0.1:3131/?env=local`) |
+| **Secondary** | Payment metrics view (5s) **or** Prometheus graphs; Grafana only if healthy |
 | **Optional** | Astronomy Shop storefront `http://localhost:8080/` |
 | **Later** | Databricks catalog tables + MLflow experiment (read-only) |
 
-Suggested Grafana dashboard (already provisioned by Astronomy Shop — no rebuild):
+**Critical:** Navbar must show environment **`local`**. If it is `production`, the SPA keeps the GitHub/Vercel/Render/Supabase **mock seed** after `/api/graph?env=production` returns 400. Always open `/?env=local` (demo-up prints this URL; viz auto-opens it).
 
-`http://localhost:8080/grafana/d/W2gX2zHVk48/spanmetrics-demo-dashboard?var-service=payment`
+Graph edges are **static dependencies** from `examples/astronomy-shop/perch.yaml` — not live trace inference. Live Pulse overlays regressions from Prometheus spanmetrics.
 
-Panels to highlight: **Top 7 Services Mean Rate**, **Top 7 Services Mean ERROR Rate**.
+Preferred secondary metrics (real Prom samples, 5s refresh):
+
+`http://127.0.0.1:3132/`  (started by `demo-up`; proxies allowlisted payment queries)
+
+If Grafana is responsive, Spanmetrics with 5s refresh:
+
+`http://localhost:8080/grafana/d/W2gX2zHVk48/spanmetrics-demo-dashboard?orgId=1&refresh=5s&from=now-15m&to=now&var-service=payment`
+
+Grafana “No data” / upstream timeout often means Grafana is CPU-starved — **not** missing telemetry. Confirm with Prometheus or `:3132` before troubleshooting collectors.
 
 ### Prometheus queries (verified nonempty under load-generator)
 
@@ -237,6 +245,7 @@ Never claim browser sidebar was verified during the 2026-10-15 ACTIVE window (AP
 | Spanmetrics dashboard | http://localhost:8080/grafana/d/W2gX2zHVk48/spanmetrics-demo-dashboard?var-service=payment |
 | Prometheus | http://localhost:9090/ |
 | Jaeger | http://localhost:8080/jaeger/ui/ |
-| Perch viz (demo default) | http://127.0.0.1:3131/ |
+| Perch viz (Astronomy Shop) | http://127.0.0.1:3131/?env=local |
+| Payment metrics (5s) | http://127.0.0.1:3132/ |
 
-Override viz port with `DEMO_VIZ_PORT`.
+Override viz port with `DEMO_VIZ_PORT`. Reload safely: `make demo-down && make demo-up` (rebuilds embedded UI when sources change; leaves shop containers running).
