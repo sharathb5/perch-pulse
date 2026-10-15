@@ -30,13 +30,13 @@ export function StackView() {
   const { stackName, nodeId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [environment, setEnvironmentState] = useState(() => envFromSearchParams(searchParams))
+  // Derive from URL — avoids setState-in-effect when landing on /?env=local.
+  const environment = envFromSearchParams(searchParams)
   /** When set, banner stays hidden until `error` changes to a different message. */
   const [dismissedError, setDismissedError] = useState(null)
 
   const setEnvironment = useCallback(
     (next) => {
-      setEnvironmentState(next)
       const params = new URLSearchParams(searchParams)
       if (next) {
         params.set('env', next)
@@ -47,12 +47,6 @@ export function StackView() {
     },
     [searchParams, setSearchParams],
   )
-
-  // Keep state in sync when landing via /?env=local (viz --env / demo-up).
-  useEffect(() => {
-    const fromUrl = envFromSearchParams(searchParams)
-    setEnvironmentState((prev) => (prev === fromUrl ? prev : fromUrl))
-  }, [searchParams])
 
   const pulseTab = normalizePulseTab(searchParams.get('pulse'))
   const incidentId = decodeIncidentId(searchParams.get('incident'))
