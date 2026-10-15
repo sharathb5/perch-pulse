@@ -62,8 +62,9 @@ function FitViewOnReady({ nodeCount, preferPaymentPath }) {
 }
 
 /** Demo framing: zoom to static frontend → checkout → payment path (full graph preserved). */
-function PaymentPathControls() {
+function PaymentPathControls({ nodes }) {
   const { fitView, getNodes } = useReactFlow()
+  const pathAvailable = paymentPathNodes(nodes).length >= 2
 
   const focusPaymentPath = useCallback(() => {
     const path = paymentPathNodes(getNodes())
@@ -77,24 +78,28 @@ function PaymentPathControls() {
 
   return (
     <Controls className="!bottom-3 !left-3 rounded-md border border-gray-200 bg-white shadow-sm">
-      <ControlButton
-        type="button"
-        data-testid="focus-payment-path"
-        onClick={focusPaymentPath}
-        title="Focus frontend → checkout → payment"
-        aria-label="Focus frontend checkout payment path"
-      >
-        <span className="text-[10px] font-semibold leading-none tracking-tight">pay</span>
-      </ControlButton>
-      <ControlButton
-        type="button"
-        data-testid="fit-all-graph"
-        onClick={showAll}
-        title="Fit entire graph"
-        aria-label="Fit entire graph"
-      >
-        <span className="text-[10px] font-semibold leading-none tracking-tight">all</span>
-      </ControlButton>
+      {pathAvailable ? (
+        <>
+          <ControlButton
+            type="button"
+            data-testid="focus-payment-path"
+            onClick={focusPaymentPath}
+            title="Focus frontend → checkout → payment"
+            aria-label="Focus frontend checkout payment path"
+          >
+            <span className="text-[10px] font-semibold leading-none tracking-tight">pay</span>
+          </ControlButton>
+          <ControlButton
+            type="button"
+            data-testid="fit-all-graph"
+            onClick={showAll}
+            title="Fit entire graph"
+            aria-label="Fit entire graph"
+          >
+            <span className="text-[10px] font-semibold leading-none tracking-tight">all</span>
+          </ControlButton>
+        </>
+      ) : null}
     </Controls>
   )
 }
@@ -186,7 +191,7 @@ export function PerchGraph({ selectedNodeId, nodes: nodesProp, edges: edgesProp,
       >
         <Background variant="dots" color="#e5e7eb" />
         <MiniMap className="!bottom-3 !right-3 !h-20 !w-28 rounded-md border border-gray-200 bg-white" />
-        <PaymentPathControls />
+        <PaymentPathControls nodes={nodes} />
         <FitViewOnReady nodeCount={nodes.length} preferPaymentPath={preferPaymentPath} />
       </ReactFlow>
     </div>
