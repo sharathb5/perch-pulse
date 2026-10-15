@@ -223,6 +223,21 @@ describe('URL-safe incident navigation', () => {
     expect(normalizePulseTab('nope')).toBe(null)
   })
 
+  it('pulseStackPath preserves env and focus from searchParams', () => {
+    expect(
+      pulseStackPath('fixture-stack', {
+        nodeId: 'api',
+        searchParams: new URLSearchParams('env=local&focus=payment-path'),
+      }),
+    ).toBe('/stack/fixture-stack/api?env=local&focus=payment-path')
+    expect(
+      pulseStackPath('fixture-stack', {
+        pulseTab: 'overview',
+        searchParams: new URLSearchParams('env=dev'),
+      }),
+    ).toBe('/stack/fixture-stack?pulse=overview&env=dev')
+  })
+
   it('supports Run Pulse tab and run query param', () => {
     expect(normalizePulseTab('run')).toBe(PULSE_TAB.RUN)
     expect(decodeRunId('run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).toBe(

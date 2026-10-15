@@ -3,6 +3,8 @@
  * Active probe health stays in mappers.js / StatusPill — never collapsed here.
  */
 
+import { appendGraphChromeQuery } from './graphEnv.js'
+
 export const PULSE_SCHEMA_SERVICES = 'pulse.api.services.v1'
 export const PULSE_SCHEMA_INCIDENTS = 'pulse.api.incidents.v1'
 export const PULSE_SCHEMA_INCIDENT = 'pulse.api.incident.v1'
@@ -99,25 +101,35 @@ export function decodeIncidentId(encoded) {
 /**
  * Build the detail-panel path for a service + optional incident reference.
  * Opens the Pulse sidebar on the incidents tab when an incident id is provided.
+ * Preserves graph chrome (`env`, `focus`) when `opts.searchParams` is passed.
+ *
  * @param {string} stackName
  * @param {string} nodeId
  * @param {string} [incidentId]
+ * @param {{
+ *   searchParams?: URLSearchParams | { get: (k: string) => string | null } | null,
+ *   env?: string | null,
+ *   focus?: string | null,
+ * }} [opts]
  */
-export function pulseIncidentPath(stackName, nodeId, incidentId) {
+export function pulseIncidentPath(stackName, nodeId, incidentId, opts = {}) {
   const base = `/stack/${encodeURIComponent(stackName)}/${encodeURIComponent(nodeId)}`
-  if (incidentId == null || String(incidentId).trim() === '') {
-    return base
-  }
   const qs = new URLSearchParams()
-  qs.set('pulse', PULSE_TAB.INCIDENTS)
-  // URLSearchParams encodes once; do not pre-encode or ids double-escape.
-  qs.set('incident', String(incidentId))
-  return `${base}?${qs.toString()}`
+  if (incidentId != null && String(incidentId).trim() !== '') {
+    qs.set('pulse', PULSE_TAB.INCIDENTS)
+    // URLSearchParams encodes once; do not pre-encode or ids double-escape.
+    qs.set('incident', String(incidentId))
+  }
+  appendGraphChromeQuery(qs, opts.searchParams, { env: opts.env, focus: opts.focus })
+  const q = qs.toString()
+  return q ? `${base}?${q}` : base
 }
 
 /**
  * Build a stack path with optional node + Pulse sidebar query state.
  * Closing the sidebar omits `pulse` / `incident` / `run` but preserves `nodeId`.
+ * Graph chrome (`env`, `focus`) is preserved when `searchParams` (or explicit
+ * `env` / `focus`) is provided — otherwise navbar env resets to production.
  *
  * @param {string} stackName
  * @param {{
@@ -125,6 +137,9 @@ export function pulseIncidentPath(stackName, nodeId, incidentId) {
  *   pulseTab?: string | null,
  *   incidentId?: string | null,
  *   runId?: string | null,
+ *   searchParams?: URLSearchParams | { get: (k: string) => string | null } | null,
+ *   env?: string | null,
+ *   focus?: string | null,
  * }} [opts]
  */
 export function pulseStackPath(stackName, opts = {}) {
@@ -151,6 +166,7 @@ export function pulseStackPath(stackName, opts = {}) {
       qs.set('pulse', PULSE_TAB.RUN)
     }
   }
+  appendGraphChromeQuery(qs, opts.searchParams, { env: opts.env, focus: opts.focus })
   const q = qs.toString()
   return q ? `${base}?${q}` : base
 }

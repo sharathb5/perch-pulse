@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { usePulseIncident } from '../hooks/usePulseIncident.js'
 import { usePulseInvestigation } from '../hooks/usePulseInvestigation.js'
 import { FEEDBACK_ASSESSMENTS } from '../lib/investigation.js'
@@ -84,6 +84,7 @@ export function PulseSidebar({
 }) {
   const { stackName, nodeId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const activeTab = tab || PULSE_TAB.OVERVIEW
 
   const closeSidebar = () => {
@@ -93,6 +94,7 @@ export function PulseSidebar({
         pulseTab: null,
         incidentId: null,
         runId: null,
+        searchParams,
       }),
     )
   }
@@ -106,6 +108,7 @@ export function PulseSidebar({
         // highlights remain while browsing Overview/Incidents/Changes.
         incidentId: next === PULSE_TAB.INCIDENTS ? incidentId : null,
         runId: runId || null,
+        searchParams,
       }),
     )
   }
@@ -494,6 +497,7 @@ function IncidentsPanel({
   nodeId,
 }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [serviceFilter, setServiceFilter] = useState('')
   const [stateFilter, setStateFilter] = useState('all')
 
@@ -532,6 +536,7 @@ function IncidentsPanel({
               nodeId,
               pulseTab: PULSE_TAB.INCIDENTS,
               incidentId: null,
+              searchParams,
             }),
           )
         }
@@ -596,6 +601,7 @@ function IncidentsPanel({
                       nodeId,
                       pulseTab: PULSE_TAB.INCIDENTS,
                       incidentId: inc.incidentId,
+                      searchParams,
                     }),
                   )
                 }
@@ -908,6 +914,7 @@ function InvestigationView({
   onBack,
 }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { detail, loading, error } = usePulseIncident(incidentId)
   const {
     investigation,
@@ -945,6 +952,7 @@ function InvestigationView({
         nodeId: graphNode,
         pulseTab: PULSE_TAB.INCIDENTS,
         incidentId,
+        searchParams,
       }),
     )
   }
@@ -1210,6 +1218,7 @@ function InvestigationView({
 
 function ChangesPanel({ changes, limitations, graphNodeByServiceId, stackName, nodeId }) {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [serviceFilter, setServiceFilter] = useState('')
   const serviceOptions = useMemo(() => {
     const ids = new Set()
@@ -1306,6 +1315,7 @@ function ChangesPanel({ changes, limitations, graphNodeByServiceId, stackName, n
                           pulseStackPath(stackName, {
                             nodeId: graphNode,
                             pulseTab: PULSE_TAB.CHANGES,
+                            searchParams,
                           }),
                         )
                       }

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { usePulseRun } from '../hooks/usePulseRun.js'
 import { usePulseWorkflows } from '../hooks/usePulseWorkflows.js'
 import {
@@ -31,6 +31,7 @@ export function PulseRunPanel({
 }) {
   const { stackName, nodeId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { workflows, loading: wfLoading, error: wfError } = usePulseWorkflows({ enabled: true })
   const { run, loading, error, starting, startRun } = usePulseRun(runId)
 
@@ -63,6 +64,7 @@ export function PulseRunPanel({
                   nodeId,
                   pulseTab: 'run',
                   runId: res.run.id,
+                  searchParams,
                 }),
               )
             }
@@ -78,7 +80,9 @@ export function PulseRunPanel({
           highlightsEnabled={highlightsEnabled}
           onClearHighlights={onClearHighlights}
           onBack={() =>
-            navigate(pulseStackPath(stackName, { nodeId, pulseTab: 'run', runId: null }))
+            navigate(
+              pulseStackPath(stackName, { nodeId, pulseTab: 'run', runId: null, searchParams }),
+            )
           }
           onSelectNode={(graphNode) =>
             navigate(
@@ -86,6 +90,7 @@ export function PulseRunPanel({
                 nodeId: graphNode,
                 pulseTab: 'run',
                 runId,
+                searchParams,
               }),
             )
           }

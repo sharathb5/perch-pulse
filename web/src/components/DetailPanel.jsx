@@ -1,9 +1,10 @@
 import { Loader2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useNodeLogs } from '../hooks/useNodeLogs.js'
 import { buildErrorPrompt, isErroredNode, openInAIWithFallback } from '../lib/aiHandoff.js'
 import { credentialKeyForNode } from '../lib/mappers.js'
+import { pulseStackPath } from '../lib/pulse.js'
 import { DeployRow } from './DeployRow.jsx'
 import { PulseSection } from './PulseSection.jsx'
 
@@ -473,6 +474,7 @@ export function DetailPanel({
 }) {
   const { stackName, nodeId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [tab, setTab] = useState('deployments')
   const [copyWhich, setCopyWhich] = useState(null)
   const logsTabFetched = useRef(false)
@@ -483,7 +485,7 @@ export function DetailPanel({
   )
 
   const close = () => {
-    navigate(`/stack/${stackName}`)
+    navigate(pulseStackPath(stackName, { searchParams }))
   }
 
   useEffect(() => {
@@ -491,11 +493,11 @@ export function DetailPanel({
       return undefined
     }
     const onKey = (e) => {
-      if (e.key === 'Escape') navigate(`/stack/${stackName}`)
+      if (e.key === 'Escape') navigate(pulseStackPath(stackName, { searchParams }))
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [navigate, stackName, escapeDisabled])
+  }, [navigate, stackName, escapeDisabled, searchParams])
 
   useEffect(() => {
     // Reset ephemeral copy feedback when the selected node or tab changes.

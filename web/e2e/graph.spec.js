@@ -47,6 +47,19 @@ test.describe('Perch viz graph (deterministic fixtures)', () => {
     await expect(page.getByTestId('service-node-web')).toBeVisible()
   })
 
+  test('environment selection persists across home redirect and node select', async ({ page }) => {
+    await mockApis(page)
+    await page.goto('/?env=local')
+    await expectGraphReady(page)
+
+    await expect(page).toHaveURL(/\/stack\/default\?env=local/)
+    await expect(page.getByLabel('Environment')).toHaveValue('local')
+
+    await page.getByTestId('service-node-web').click()
+    await expect(page.getByLabel('Environment')).toHaveValue('local')
+    await expect(page).toHaveURL(/env=local/)
+  })
+
   test('API error keeps last-known (mock) data and shows banner', async ({ page }) => {
     await mockApis(page, { graphStatus: 503, statusStatus: 503 })
     await page.goto('/stack/default')

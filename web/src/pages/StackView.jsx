@@ -216,9 +216,10 @@ export function StackView() {
         pulseTab: pulseTab || 'overview',
         incidentId: incidentId || null,
         runId: runId || null,
+        searchParams,
       }),
     )
-  }, [navigate, stackName, nodeId, pulseTab, incidentId, runId])
+  }, [navigate, stackName, nodeId, pulseTab, incidentId, runId, searchParams])
 
   useEffect(() => {
     const onKey = (e) => {
@@ -231,6 +232,7 @@ export function StackView() {
               pulseTab: pulseTab || 'incidents',
               incidentId: null,
               runId: runId || null,
+              searchParams,
             }),
           )
           return
@@ -241,6 +243,7 @@ export function StackView() {
               nodeId,
               pulseTab: pulseTab || 'run',
               runId: null,
+              searchParams,
             }),
           )
           return
@@ -251,17 +254,18 @@ export function StackView() {
             pulseTab: null,
             incidentId: null,
             runId: null,
+            searchParams,
           }),
         )
         return
       }
       if (nodeId) {
-        navigate(`/stack/${stackName}`)
+        navigate(pulseStackPath(stackName, { searchParams }))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [pulseOpen, incidentId, runId, navigate, stackName, nodeId, pulseTab])
+  }, [pulseOpen, incidentId, runId, navigate, stackName, nodeId, pulseTab, searchParams])
 
   const showBanner = error != null && error !== '' && error !== dismissedError
 
