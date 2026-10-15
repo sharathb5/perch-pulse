@@ -62,7 +62,7 @@ Scripted path:
 ASTRONOMY_LIVE_FAULT_SCENARIO=error-payment ./examples/astronomy-shop/scripts/ci-live-fault.sh
 ```
 
-**Honesty:** 2026-10-09 verified shop telemetry + flagd scenario activation/recovery. A full live-fault→sidebar PASS is tooling-ready but not claimed as freshly re-run in this RC when disk-constrained.
+**Honesty:** 2026-10-09 verified shop telemetry + flagd scenario activation/recovery. **2026-10-15** verified live-fault→Live Pulse API ACTIVE→RECOVERED for `error-payment` (detection ≈70 s, recovery ≈130 s) on existing containers — see [`verification-matrix.md`](verification-matrix.md#2026-10-15--live-error-payment-fault-lifecycle). Browser sidebar during the ACTIVE window was **not** re-verified that session.
 
 ---
 

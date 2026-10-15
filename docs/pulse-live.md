@@ -128,6 +128,8 @@ Live run (manual, not a PR gate):
 ./examples/astronomy-shop/scripts/ci-live-fault.sh
 ```
 
+**Dated local PASS (2026-10-15):** reused existing Astronomy Shop containers (no rebuild); ran `live-fault-smoke` with `error-payment` against Live Pulse on port 18765. Result **PASS** — payment `error_rate` 0→0.5, active incident then measured recovery. Detection ≈70.3 s after fault on; recovery ≈130 s after fault off. Full `ci-live-fault.sh` was not used (its cleanup stops Docker). See [`verification-matrix.md`](verification-matrix.md#2026-10-15--live-error-payment-fault-lifecycle) and [`pulse-metrics.md`](pulse-metrics.md). Browser UI during ACTIVE was not verified.
+
 ## Limitations (MVP)
 
 - Process restart clears rolling baselines; open files remain but a continuing
