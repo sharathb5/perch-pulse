@@ -65,10 +65,12 @@ Primary scenario: **`error-payment`** (payment error-rate fault via flagd).
 | **REPLAY** | Labeled historical sample export / UI fixtures |
 | **LIVE** | Real shop telemetry + real fault (disk ≥ 15 GiB) |
 
-Orchestration: [`docs/demo-runbook.md`](docs/demo-runbook.md) · spoken script: [`docs/demo-script.md`](docs/demo-script.md) · honesty matrix: [`docs/verification-matrix.md`](docs/verification-matrix.md)
+Orchestration: [`docs/demo-runbook.md`](docs/demo-runbook.md) · spoken script: [`docs/demo-script.md`](docs/demo-script.md) · LIVE recording: [`docs/demo-recording.md`](docs/demo-recording.md) · honesty matrix: [`docs/verification-matrix.md`](docs/verification-matrix.md)
 
 ```bash
 ./scripts/demo/pulse-demo.sh --mode mock --phase offline
+# LIVE recording (reuses Astronomy Shop; see docs/demo-recording.md):
+# make demo-up && make demo-status && make demo-fault   # then demo-recover / demo-down
 ```
 
 ---
@@ -197,6 +199,7 @@ Connection check ≠ completed ingestion. A dated demo PASS exists; re-running c
 | Databricks offline | `make databricks-integration-test` |
 | UI e2e | `make web-e2e` |
 | Demo offline | `./scripts/demo/pulse-demo.sh --mode mock --phase offline` |
+| Demo recording (LIVE) | `make demo-up` / `demo-status` / `demo-fault` / `demo-recover` / `demo-down` |
 
 Journey honesty table: [`docs/verification-matrix.md`](docs/verification-matrix.md)  
 Reproducible offline metrics: [`docs/pulse-metrics.md`](docs/pulse-metrics.md)  
