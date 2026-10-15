@@ -694,15 +694,17 @@ stop_demo_viz() {
 
 print_urls() {
   local perch_ui metrics_ui
-  perch_ui="$(viz_base)/?env=local"
+  perch_ui="$(viz_base)/?env=local&focus=payment-path"
   metrics_ui="http://127.0.0.1:${METRICS_PORT}/"
   cat <<EOF
 
 === Demo URLs (recording-ready) ===
 Perch viz (Astronomy Shop):  ${perch_ui}
   MUST use env=local — navbar "production" keeps the GitHub/Vercel mock seed.
+  focus=payment-path frames frontend → checkout → payment (full graph preserved).
+  Controls: bottom-left "pay" = focus path, "all" = fit entire graph.
 Pulse live API:              $(viz_base)/api/pulse/live/status
-Payment metrics (5s refresh): ${metrics_ui}
+Payment metrics (5s + charts): ${metrics_ui}
 Prometheus (authoritative):  ${PROM_URL}/
   Payment rate:  ${PROM_URL}/graph?g0.expr=sum(rate(traces_span_metrics_calls_total%7Bservice_name%3D%22payment%22%7D%5B2m%5D))&g0.tab=0&g0.range_input=15m
   Payment errs:  ${PROM_URL}/graph?g0.expr=sum(rate(traces_span_metrics_calls_total%7Bservice_name%3D%22payment%22%2Cstatus_code%3D%22STATUS_CODE_ERROR%22%7D%5B2m%5D))&g0.tab=0&g0.range_input=15m

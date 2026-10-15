@@ -6,23 +6,37 @@
   <title>Perch demo — payment spanmetrics (live Prometheus)</title>
   <style>
     :root { color-scheme: light; font-family: ui-sans-serif, system-ui, sans-serif; }
-    body { margin: 1.5rem; background: #f6f7f9; color: #111; }
+    body { margin: 1.25rem; background: #f6f7f9; color: #111; }
     h1 { font-size: 1.15rem; margin: 0 0 0.25rem; }
-    .sub { color: #555; font-size: 0.85rem; margin-bottom: 1rem; }
-    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; }
-    .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
-    .value { font-size: 1.75rem; font-variant-numeric: tabular-nums; margin-top: 0.35rem; }
-    .meta { margin-top: 1rem; font-size: 0.8rem; color: #6b7280; }
-    .err { color: #b91c1c; white-space: pre-wrap; }
+    .sub { color: #555; font-size: 0.85rem; margin-bottom: 1rem; max-width: 52rem; }
+    .grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.85rem 1rem; }
+    .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+    .value { font-size: 1.6rem; font-variant-numeric: tabular-nums; margin-top: 0.25rem; font-weight: 600; }
+    .value.warn { color: #b45309; }
+    .value.bad { color: #b91c1c; }
+    .charts { display: grid; gap: 1rem; margin-top: 1rem; }
+    .chart-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.85rem 1rem 0.5rem; }
+    .chart-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.35rem; }
+    .chart-hint { font-size: 0.7rem; color: #6b7280; margin-bottom: 0.35rem; }
+    svg.chart { width: 100%; height: 180px; display: block; }
+    .meta { margin-top: 0.85rem; font-size: 0.8rem; color: #6b7280; }
+    .err { color: #b91c1c; white-space: pre-wrap; font-size: 0.85rem; }
+    .badge { display: inline-block; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid #d1d5db; color: #374151; margin-left: 0.35rem; vertical-align: middle; }
+    .badge.ok { border-color: #86efac; background: #f0fdf4; color: #166534; }
+    .badge.stale { border-color: #fcd34d; background: #fffbeb; color: #92400e; }
+    .badge.missing { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+    .badge.loading { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; }
     code { font-size: 0.75rem; }
   </style>
 </head>
 <body>
   <h1>Payment service — live OpenTelemetry spanmetrics</h1>
   <p class="sub">
-    Reads <strong>real</strong> samples from local Prometheus (<code id="prom"></code>).
-    Auto-refresh 5s. Not a Grafana replacement — recording secondary window when Grafana is overloaded.
+    Real Prometheus samples only (no fabricated points). Instant cards + 10‑minute
+    <code>query_range</code> charts. Refresh every 5s.
+    Source: <code id="prom"></code>
+    <span id="statusBadge" class="badge loading">loading</span>
   </p>
   <div class="grid">
     <div class="card">
@@ -30,7 +44,7 @@
       <div class="value" id="rate">—</div>
     </div>
     <div class="card">
-      <div class="label">Error rate (ratio, 2m)</div>
+      <div class="label">Error rate (2m window)</div>
       <div class="value" id="errors">—</div>
     </div>
     <div class="card">
@@ -38,11 +52,21 @@
       <div class="value" id="p99">—</div>
     </div>
   </div>
+  <div class="charts">
+    <div class="chart-card">
+      <div class="chart-title">Payment error rate — last 10 minutes</div>
+      <div class="chart-hint">Y-axis 0–60% so a rise toward 50% is obvious. Gaps mean missing samples.</div>
+      <svg id="errChart" class="chart" viewBox="0 0 640 180" preserveAspectRatio="none" aria-label="Payment error rate chart"></svg>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Payment call rate — last 10 minutes</div>
+      <div class="chart-hint">Calls/sec from spanmetrics. Auto-scaled to observed max.</div>
+      <svg id="rateChart" class="chart" viewBox="0 0 640 180" preserveAspectRatio="none" aria-label="Payment call rate chart"></svg>
+    </div>
+  </div>
   <p class="meta" id="meta">Waiting for first sample…</p>
   <p class="err" id="err"></p>
   <script>
-    // Default '' = same-origin proxy from payment_metrics_server.py (avoids Prometheus CORS).
-    // Override with ?prom=http://127.0.0.1:9090 only if the Prom UI allows CORS.
     const PROM = new URLSearchParams(location.search).get('prom') || ''
     document.getElementById('prom').textContent = PROM || (location.origin + ' (proxy)')
 
@@ -52,43 +76,223 @@
       p99: 'histogram_quantile(0.99, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{service_name="payment"}[2m])))',
     }
 
-    function fmt(v) {
-      if (v === '' || v == null || Number.isNaN(Number(v))) return 'MISSING'
-      const n = Number(v)
-      if (Math.abs(n) >= 1) return n.toFixed(3)
-      return n.toFixed(4)
+    let lastOkAt = 0
+    let hadAnySample = false
+
+    function setBadge(kind, text) {
+      const el = document.getElementById('statusBadge')
+      el.className = 'badge ' + kind
+      el.textContent = text
     }
 
-    async function query(expr) {
+    function fmtRate(v) {
+      if (v === '' || v == null || Number.isNaN(Number(v))) return 'MISSING'
+      return Number(v).toFixed(3)
+    }
+
+    function fmtPct(v) {
+      if (v === '' || v == null || Number.isNaN(Number(v))) return 'MISSING'
+      return (Number(v) * 100).toFixed(1) + '%'
+    }
+
+    function fmtMs(v) {
+      if (v === '' || v == null || Number.isNaN(Number(v))) return 'MISSING'
+      return Number(v).toFixed(1)
+    }
+
+    function errorClass(v) {
+      if (v === '' || v == null || Number.isNaN(Number(v))) return ''
+      const n = Number(v)
+      if (n >= 0.25) return 'bad'
+      if (n >= 0.05) return 'warn'
+      return ''
+    }
+
+    async function queryInstant(expr) {
       const base = PROM || location.origin
       const u = new URL('/api/v1/query', base)
       u.searchParams.set('query', expr)
       const res = await fetch(u)
-      if (!res.ok) throw new Error('Prometheus HTTP ' + res.status)
+      if (!res.ok) throw new Error('Prometheus HTTP ' + res.status + ' (instant)')
       const body = await res.json()
-      if (body.status !== 'success') throw new Error('Prometheus query failed')
+      if (body.status !== 'success') throw new Error('Prometheus instant query failed')
       const result = (body.data && body.data.result) || []
       if (!result.length) return ''
       const val = result[0].value
       return Array.isArray(val) ? val[1] : ''
     }
 
+    async function queryRange(expr, seconds, step) {
+      const base = PROM || location.origin
+      const end = Math.floor(Date.now() / 1000)
+      const start = end - seconds
+      const u = new URL('/api/v1/query_range', base)
+      u.searchParams.set('query', expr)
+      u.searchParams.set('start', String(start))
+      u.searchParams.set('end', String(end))
+      u.searchParams.set('step', String(step))
+      const res = await fetch(u)
+      if (!res.ok) throw new Error('Prometheus HTTP ' + res.status + ' (range)')
+      const body = await res.json()
+      if (body.status !== 'success') throw new Error('Prometheus range query failed')
+      const result = (body.data && body.data.result) || []
+      if (!result.length) return []
+      // Real samples only — do not invent points for gaps.
+      return (result[0].values || []).map(([ts, v]) => ({ t: Number(ts), v: Number(v) }))
+        .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.v))
+    }
+
+    function fmtClock(ts) {
+      const d = new Date(ts * 1000)
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+
+    /**
+     * Draw a line chart from real samples. Missing ranges are gaps (no interpolation).
+     * @param {string} svgId
+     * @param {{t:number,v:number}[]} points
+     * @param {{ yMin:number, yMax:number, yTick:(n:number)=>string, stroke:string, fill:string }} opts
+     */
+    function drawChart(svgId, points, opts) {
+      const svg = document.getElementById(svgId)
+      const W = 640, H = 180
+      const pad = { l: 48, r: 12, t: 12, b: 28 }
+      const iw = W - pad.l - pad.r
+      const ih = H - pad.t - pad.b
+      const yMin = opts.yMin
+      const yMax = opts.yMax <= yMin ? yMin + 1 : opts.yMax
+
+      if (!points.length) {
+        svg.innerHTML = '<text x="320" y="90" text-anchor="middle" fill="#9ca3af" font-size="13">No samples in window</text>'
+        return
+      }
+
+      const t0 = points[0].t
+      const t1 = points[points.length - 1].t
+      const tSpan = Math.max(1, t1 - t0)
+      const xOf = (t) => pad.l + ((t - t0) / tSpan) * iw
+      const yOf = (v) => pad.t + ih - ((v - yMin) / (yMax - yMin)) * ih
+
+      // Break polyline at large time gaps (> 2.5× median step) — no fabricated bridging.
+      const gaps = []
+      for (let i = 1; i < points.length; i++) gaps.push(points[i].t - points[i - 1].t)
+      gaps.sort((a, b) => a - b)
+      const med = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 15
+      const breakGap = Math.max(med * 2.5, 45)
+
+      let d = ''
+      let started = false
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i]
+        if (i > 0 && points[i].t - points[i - 1].t > breakGap) {
+          started = false
+        }
+        const x = xOf(p.t), y = yOf(p.v)
+        if (!started) {
+          d += `M ${x.toFixed(1)} ${y.toFixed(1)} `
+          started = true
+        } else {
+          d += `L ${x.toFixed(1)} ${y.toFixed(1)} `
+        }
+      }
+
+      const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => yMin + f * (yMax - yMin))
+      const grid = yTicks.map((yv) => {
+        const y = yOf(yv)
+        return `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="#e5e7eb" stroke-width="1"/>` +
+          `<text x="${pad.l - 6}" y="${y + 3}" text-anchor="end" fill="#6b7280" font-size="10">${opts.yTick(yv)}</text>`
+      }).join('')
+
+      const xLabels = [0, 0.5, 1].map((f) => {
+        const t = t0 + f * tSpan
+        const x = xOf(t)
+        return `<text x="${x}" y="${H - 8}" text-anchor="middle" fill="#6b7280" font-size="10">${fmtClock(t)}</text>`
+      }).join('')
+
+      // Reference line at 50% for error-rate charts (when scale includes it).
+      let ref = ''
+      if (opts.ref != null && opts.ref >= yMin && opts.ref <= yMax) {
+        const y = yOf(opts.ref)
+        ref = `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="#fca5a5" stroke-dasharray="4 3" stroke-width="1"/>` +
+          `<text x="${W - pad.r}" y="${y - 4}" text-anchor="end" fill="#b91c1c" font-size="10">${opts.yTick(opts.ref)}</text>`
+      }
+
+      svg.innerHTML =
+        grid + ref +
+        `<path d="${d.trim()}" fill="none" stroke="${opts.stroke}" stroke-width="2.25" stroke-linejoin="round" stroke-linecap="round"/>` +
+        xLabels
+    }
+
     async function tick() {
-      const err = document.getElementById('err')
-      err.textContent = ''
+      const errEl = document.getElementById('err')
+      errEl.textContent = ''
+      if (!hadAnySample) setBadge('loading', 'loading')
       try {
-        const [rate, errors, p99] = await Promise.all([query(Q.rate), query(Q.errors), query(Q.p99)])
-        document.getElementById('rate').textContent = fmt(rate)
-        document.getElementById('errors').textContent = fmt(errors)
-        document.getElementById('p99').textContent = fmt(p99)
-        document.getElementById('meta').textContent =
-          'Last refresh ' + new Date().toISOString() +
-          (rate === '' ? ' — payment series MISSING (is load-generator running?)' : ' — samples OK')
+        const now = Math.floor(Date.now() / 1000)
+        const [rate, errors, p99, errSeries, rateSeries] = await Promise.all([
+          queryInstant(Q.rate),
+          queryInstant(Q.errors),
+          queryInstant(Q.p99),
+          queryRange(Q.errors, 600, 15),
+          queryRange(Q.rate, 600, 15),
+        ])
+
+        const rateEl = document.getElementById('rate')
+        const errValEl = document.getElementById('errors')
+        const p99El = document.getElementById('p99')
+        rateEl.textContent = fmtRate(rate)
+        errValEl.textContent = fmtPct(errors)
+        errValEl.className = 'value ' + errorClass(errors)
+        p99El.textContent = fmtMs(p99)
+
+        const missingInstant = rate === '' && errors === ''
+        if (missingInstant && !errSeries.length && !rateSeries.length) {
+          setBadge('missing', 'missing')
+          document.getElementById('meta').textContent =
+            'Last attempt ' + new Date().toISOString() + ' — payment series MISSING'
+        } else {
+          hadAnySample = true
+          lastOkAt = Date.now()
+          setBadge('ok', 'live')
+          document.getElementById('meta').textContent =
+            'Last refresh ' + new Date().toISOString() +
+            ` — ${errSeries.length} error-rate samples, ${rateSeries.length} call-rate samples (10m / 15s step)`
+        }
+
+        // Error rate: fixed 0–60% scale so 0→50% is visually clear.
+        drawChart('errChart', errSeries, {
+          yMin: 0,
+          yMax: 0.6,
+          yTick: (n) => (n * 100).toFixed(0) + '%',
+          stroke: '#dc2626',
+          ref: 0.5,
+        })
+
+        const rateMax = rateSeries.reduce((m, p) => Math.max(m, p.v), 0)
+        drawChart('rateChart', rateSeries, {
+          yMin: 0,
+          yMax: Math.max(rateMax * 1.15, 0.05),
+          yTick: (n) => n.toFixed(2),
+          stroke: '#2563eb',
+        })
       } catch (e) {
-        err.textContent = String(e.message || e) +
-          '\nIf this page was opened as file://, serve it via Perch/demo URLs or open Prometheus graph links instead (CORS).'
+        errEl.textContent = String(e.message || e)
+        if (hadAnySample && Date.now() - lastOkAt > 15000) {
+          setBadge('stale', 'stale')
+          document.getElementById('meta').textContent =
+            'Last good sample ' + new Date(lastOkAt).toISOString() + ' — refresh failed (showing last charts)'
+        } else if (!hadAnySample) {
+          setBadge('missing', 'error')
+        }
       }
     }
+
+    // Stale watchdog even if tick hangs.
+    setInterval(() => {
+      if (hadAnySample && Date.now() - lastOkAt > 15000) {
+        setBadge('stale', 'stale')
+      }
+    }, 2000)
 
     tick()
     setInterval(tick, 5000)

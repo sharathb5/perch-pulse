@@ -102,6 +102,7 @@ demo-down:
 demo-test:
 	./scripts/demo/test_provenance.sh
 	./scripts/demo/test_recording.sh
+	python3 ./scripts/demo/test_payment_metrics.py
 
 # --- Aggregate gate ---------------------------------------------------------
 

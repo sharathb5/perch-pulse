@@ -44,9 +44,14 @@ Related: narrative script [`demo-script.md`](demo-script.md), broader orchestrat
 
 Graph edges are **static dependencies** from `examples/astronomy-shop/perch.yaml` — not live trace inference. Live Pulse overlays regressions from Prometheus spanmetrics.
 
-Preferred secondary metrics (real Prom samples, 5s refresh):
+Preferred secondary metrics (real Prom samples, 5s refresh + 10m charts):
 
-`http://127.0.0.1:3132/`  (started by `demo-up`; proxies allowlisted payment queries)
+`http://127.0.0.1:3132/`  (started by `demo-up`; proxies allowlisted instant + `query_range`)
+
+Perch framing URL (static dependency path, not live traces):
+
+`http://127.0.0.1:3131/?env=local&focus=payment-path`  
+Bottom-left controls: **pay** focuses `frontend → checkout → payment`; **all** fits the full graph.
 
 If Grafana is responsive, Spanmetrics with 5s refresh:
 
@@ -245,7 +250,7 @@ Never claim browser sidebar was verified during the 2026-10-15 ACTIVE window (AP
 | Spanmetrics dashboard | http://localhost:8080/grafana/d/W2gX2zHVk48/spanmetrics-demo-dashboard?var-service=payment |
 | Prometheus | http://localhost:9090/ |
 | Jaeger | http://localhost:8080/jaeger/ui/ |
-| Perch viz (Astronomy Shop) | http://127.0.0.1:3131/?env=local |
-| Payment metrics (5s) | http://127.0.0.1:3132/ |
+| Perch viz (Astronomy Shop) | http://127.0.0.1:3131/?env=local&focus=payment-path |
+| Payment metrics (5s + charts) | http://127.0.0.1:3132/ |
 
 Override viz port with `DEMO_VIZ_PORT`. Reload safely: `make demo-down && make demo-up` (rebuilds embedded UI when sources change; leaves shop containers running).
