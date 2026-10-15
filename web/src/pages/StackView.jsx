@@ -2,6 +2,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { liveEnvAllowsGraphJoin } from '../lib/livePulse.js'
+import { envFromSearchParams } from '../lib/graphEnv.js'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DetailPanel } from '../components/DetailPanel.jsx'
 import { Navbar } from '../components/Navbar.jsx'
@@ -27,11 +28,25 @@ import { RunPulseHighlightProvider } from '../lib/runPulseHighlight.jsx'
  */
 export function StackView() {
   const { stackName, nodeId } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [environment, setEnvironment] = useState('production')
+  // Derive from URL — avoids setState-in-effect when landing on /?env=local.
+  const environment = envFromSearchParams(searchParams)
   /** When set, banner stays hidden until `error` changes to a different message. */
   const [dismissedError, setDismissedError] = useState(null)
+
+  const setEnvironment = useCallback(
+    (next) => {
+      const params = new URLSearchParams(searchParams)
+      if (next) {
+        params.set('env', next)
+      } else {
+        params.delete('env')
+      }
+      setSearchParams(params, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
 
   const pulseTab = normalizePulseTab(searchParams.get('pulse'))
   const incidentId = decodeIncidentId(searchParams.get('incident'))

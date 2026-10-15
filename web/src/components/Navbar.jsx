@@ -4,6 +4,8 @@ const envOptions = [
   { value: 'production', label: 'production' },
   { value: 'staging', label: 'staging' },
   { value: 'dev', label: 'dev' },
+  // Astronomy Shop / Live Pulse demo uses perch.yaml environments.local
+  { value: 'local', label: 'local' },
 ]
 
 /**

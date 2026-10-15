@@ -21,6 +21,11 @@ VIZ_META_FILE="$STATE_DIR/viz.meta"
 VIZ_LOG_FILE="$STATE_DIR/viz.log"
 PERCH_BIN_FILE="$STATE_DIR/perch"
 PULSE_DIR="${PERCH_PULSE_DIR:-$STATE_DIR/pulse-dir}"
+METRICS_PORT="${DEMO_METRICS_PORT:-3132}"
+METRICS_PID_FILE="$STATE_DIR/payment-metrics.pid"
+METRICS_LOG_FILE="$STATE_DIR/payment-metrics.log"
+METRICS_SERVER="$ROOT/scripts/demo/payment_metrics_server.py"
+PERCH_YAML="$SHOP/perch.yaml"
 
 BASE_URL="${ASTRONOMY_BASE_URL:-http://127.0.0.1:8080}"
 PROM_URL="${PERCH_LIVE_PULSE_PROM_URL:-http://127.0.0.1:9090}"
@@ -433,26 +438,154 @@ ensure_perch_bin() {
     echo "$PERCH_BIN"
     return 0
   fi
-  if [[ -x "$PERCH_BIN_FILE" ]]; then
-    echo "$PERCH_BIN_FILE"
+  mkdir_state
+  local need_web=0 need_bin=0
+  if [[ ! -f "$ROOT/web/dist/index.html" ]]; then
+    need_web=1
+  fi
+  if [[ ! -x "$PERCH_BIN_FILE" ]]; then
+    need_bin=1
+  elif [[ "$ROOT/web/dist/index.html" -nt "$PERCH_BIN_FILE" ]] || \
+       [[ "$ROOT/internal/cli/viz.go" -nt "$PERCH_BIN_FILE" ]] || \
+       [[ "$ROOT/web/src/pages/StackView.jsx" -nt "$PERCH_BIN_FILE" ]] || \
+       [[ "$ROOT/web/src/components/Navbar.jsx" -nt "$PERCH_BIN_FILE" ]]; then
+    need_web=1
+    need_bin=1
+  fi
+  if [[ "$need_web" -eq 1 ]]; then
+    log "building embedded web assets"
+    # Keep stdout clean — callers capture this function's echo path only.
+    make web-build-embed >&2
+  fi
+  if [[ "$need_bin" -eq 1 || ! -x "$PERCH_BIN_FILE" ]]; then
+    log "building perch binary → $PERCH_BIN_FILE"
+    (cd "$ROOT" && go build -o "$PERCH_BIN_FILE" ./cmd/perch) >&2
+  fi
+  echo "$PERCH_BIN_FILE"
+}
+
+verify_astronomy_graph() {
+  # Ensure browser graph is Astronomy Shop topology (not GitHub/Vercel mock seed).
+  local body
+  body="$(http_body "$(viz_base)/api/graph?env=local" 8)"
+  if [[ "$MOCK_MODE" == "1" ]]; then
+    if [[ -n "$MOCK_FIXTURE_DIR" && -f "$MOCK_FIXTURE_DIR/graph_local.json" ]]; then
+      body="$(cat "$MOCK_FIXTURE_DIR/graph_local.json")"
+    else
+      body='{"appName":"perch-astronomy-shop","environment":"local","nodes":[{"id":"payment"},{"id":"checkout"},{"id":"frontend"}]}'
+    fi
+  fi
+  python3 -c '
+import json,sys
+try:
+  d=json.load(sys.stdin)
+except Exception as e:
+  print("FAIL: graph JSON unreadable:", e); raise SystemExit(2)
+nodes=d.get("nodes") or []
+ids=[]
+for n in nodes:
+  if isinstance(n, dict):
+    # API uses "name"; some fixtures use "id".
+    ids.append(str(n.get("name") or n.get("id") or ""))
+  else:
+    ids.append(str(n))
+need={"payment","checkout","frontend"}
+missing=sorted(need - set(ids))
+mock={"github","vercel","render","supabase"}
+if mock & set(ids) and not (need & set(ids)):
+  print("FAIL: graph looks like UI mock seed (github/vercel/…); open ?env=local")
+  raise SystemExit(3)
+if missing:
+  print("FAIL: astronomy graph missing nodes:", ",".join(missing), "have:", ",".join(ids))
+  raise SystemExit(4)
+app=d.get("appName") or ""
+print("OK: astronomy graph app=%s env=%s nodes=%d" % (app, d.get("environment"), len(ids)))
+' <<<"$body"
+}
+
+start_payment_metrics_view() {
+  mkdir_state
+  if [[ "$MOCK_MODE" == "1" ]]; then
+    echo "88888" >"$METRICS_PID_FILE"
     return 0
   fi
-  mkdir_state
-  if [[ ! -f "$ROOT/web/dist/index.html" ]]; then
-    log "building embedded web assets (web/dist missing)"
-    make web-build-embed
+  if [[ -f "$METRICS_PID_FILE" ]]; then
+    local old
+    old="$(tr -d '[:space:]' <"$METRICS_PID_FILE")"
+    if [[ "$old" =~ ^[0-9]+$ ]] && kill -0 "$old" 2>/dev/null; then
+      if http_ok "http://127.0.0.1:${METRICS_PORT}/healthz" 2; then
+        log "reusing payment metrics view pid=$old"
+        return 0
+      fi
+    fi
   fi
-  log "building perch binary → $PERCH_BIN_FILE"
-  (cd "$ROOT" && go build -o "$PERCH_BIN_FILE" ./cmd/perch)
-  echo "$PERCH_BIN_FILE"
+  if http_ok "http://127.0.0.1:${METRICS_PORT}/healthz" 2; then
+    warn "port ${METRICS_PORT} already serves metrics view — leaving it alone"
+    echo "external" >"$STATE_DIR/metrics_ownership"
+    return 0
+  fi
+  require_cmd python3
+  [[ -f "$METRICS_SERVER" ]] || fail "missing $METRICS_SERVER"
+  nohup python3 "$METRICS_SERVER" --listen "127.0.0.1:${METRICS_PORT}" --prom "$PROM_URL" \
+    >"$METRICS_LOG_FILE" 2>&1 </dev/null &
+  echo $! >"$METRICS_PID_FILE"
+  disown "$(tr -d '[:space:]' <"$METRICS_PID_FILE")" 2>/dev/null || true
+  echo "demo" >"$STATE_DIR/metrics_ownership"
+  local i
+  for i in $(seq 1 20); do
+    if http_ok "http://127.0.0.1:${METRICS_PORT}/healthz" 2; then
+      log "payment metrics view ready on http://127.0.0.1:${METRICS_PORT}/"
+      return 0
+    fi
+    sleep 0.25
+  done
+  warn "payment metrics view did not become ready — use Prometheus graph URLs instead"
+}
+
+stop_payment_metrics_view() {
+  local ownership pid
+  ownership="$(cat "$STATE_DIR/metrics_ownership" 2>/dev/null || echo "")"
+  if [[ "$ownership" == "external" ]]; then
+    log "payment metrics view was external — not stopping"
+    return 0
+  fi
+  if [[ ! -f "$METRICS_PID_FILE" ]]; then
+    return 0
+  fi
+  pid="$(tr -d '[:space:]' <"$METRICS_PID_FILE" || true)"
+  if [[ -z "$pid" ]]; then
+    rm -f "$METRICS_PID_FILE"
+    return 0
+  fi
+  if [[ "$MOCK_MODE" == "1" ]]; then
+    rm -f "$METRICS_PID_FILE"
+    return 0
+  fi
+  if kill -0 "$pid" 2>/dev/null; then
+    log "stopping payment metrics view pid=$pid"
+    kill "$pid" 2>/dev/null || true
+  fi
+  rm -f "$METRICS_PID_FILE"
 }
 
 start_demo_viz() {
   local bin pid
   mkdir_state
+  # Build/refresh binary before reuse checks so we can detect stale running viz.
+  bin="$(ensure_perch_bin)"
+
   if pid="$(read_owned_viz_pid 2>/dev/null || true)" && is_demo_owned_viz "$pid" && viz_http_ready; then
-    log "reusing demo-owned perch viz pid=$pid port=$VIZ_PORT"
-    return 0
+    # Same path rebuilt on disk while an old process still serves memory-mapped UI.
+    if [[ -f "$VIZ_META_FILE" && -x "$bin" && "$bin" -nt "$VIZ_META_FILE" ]]; then
+      warn "perch binary newer than running viz — restarting so ?env=local UI is embedded"
+      stop_demo_viz
+    elif verify_astronomy_graph >/dev/null 2>&1; then
+      log "reusing demo-owned perch viz pid=$pid port=$VIZ_PORT"
+      return 0
+    else
+      warn "owned viz graph failed astronomy check — restarting"
+      stop_demo_viz
+    fi
   fi
   # Do not steal an unrelated listener on the port (real mode only).
   # Mock fixtures may list viz URLs as reachable before ownership is established.
@@ -464,12 +597,10 @@ start_demo_viz() {
     fi
     fail "port ${VIZ_PORT} is occupied by a non-Live-Pulse server; set DEMO_VIZ_PORT or stop that process"
   fi
-
-  bin="$(ensure_perch_bin)"
   export PERCH_LIVE_PULSE_ENABLED=1
   export PERCH_LIVE_PULSE_PROM_URL="$PROM_URL"
   export PERCH_LIVE_PULSE_ENVIRONMENT=local
-  export PERCH_LIVE_PULSE_POLL_INTERVAL="${PERCH_LIVE_PULSE_POLL_INTERVAL:-15s}"
+  export PERCH_LIVE_PULSE_POLL_INTERVAL="${PERCH_LIVE_PULSE_POLL_INTERVAL:-10s}"
   export PERCH_PULSE_DIR="$PULSE_DIR"
   export PERCH_RUN_PULSE_DEMO_BASE_URL="${PERCH_RUN_PULSE_DEMO_BASE_URL:-$BASE_URL}"
   export PERCH_RUN_PULSE_JAEGER_BASE="${PERCH_RUN_PULSE_JAEGER_BASE:-$JAEGER_UI}"
@@ -481,21 +612,24 @@ owner=demo-recording
 port=${VIZ_PORT}
 started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 pulse_dir=${PULSE_DIR}
+perch_yaml=${PERCH_YAML}
 EOF
     touch "$STATE_DIR/mock_viz_alive"
     echo "demo" >"$STATE_DIR/viz_ownership"
     return 0
   fi
 
-  log "starting perch viz Live Pulse on 127.0.0.1:${VIZ_PORT}"
-  # nohup + exec: survive make/shell exit (SIGHUP) and keep PID = perch binary
-  # so ownership checks can match `viz --port`.
+  [[ -f "$PERCH_YAML" ]] || fail "missing Astronomy Shop perch.yaml at $PERCH_YAML"
+  log "starting perch viz Live Pulse on 127.0.0.1:${VIZ_PORT} (cwd=$SHOP env=local → ?env=local)"
+  # nohup + exec + disown + closed stdin: survive make/shell exit on macOS.
+  # Working directory must be examples/astronomy-shop so perch.yaml loads.
   (
     cd "$SHOP"
     # shellcheck disable=SC2086
     exec nohup "$bin" viz --env local --port "$VIZ_PORT"
-  ) >"$VIZ_LOG_FILE" 2>&1 &
+  ) >"$VIZ_LOG_FILE" 2>&1 </dev/null &
   pid=$!
+  disown "$pid" 2>/dev/null || true
   echo "$pid" >"$VIZ_PID_FILE"
   cat >"$VIZ_META_FILE" <<EOF
 owner=demo-recording
@@ -504,6 +638,8 @@ pid=${pid}
 started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 pulse_dir=${PULSE_DIR}
 bin=${bin}
+perch_yaml=${PERCH_YAML}
+env=local
 EOF
   echo "demo" >"$STATE_DIR/viz_ownership"
 
@@ -557,20 +693,27 @@ stop_demo_viz() {
 }
 
 print_urls() {
+  local perch_ui metrics_ui
+  perch_ui="$(viz_base)/?env=local"
+  metrics_ui="http://127.0.0.1:${METRICS_PORT}/"
   cat <<EOF
 
-=== Demo URLs ===
-Astronomy Shop:  ${BASE_URL}/
-Load generator:  ${BASE_URL}/loadgen/
-Feature flags:   ${BASE_URL}/feature/
-Grafana:         ${BASE_URL}/grafana/
-  Spanmetrics:   ${BASE_URL}/grafana/d/W2gX2zHVk48/spanmetrics-demo-dashboard?var-service=payment
-Prometheus:      ${PROM_URL}/
-  Payment rate:  ${PROM_URL}/graph?g0.expr=sum(rate(traces_span_metrics_calls_total%7Bservice_name%3D%22payment%22%7D%5B2m%5D))&g0.tab=0
-  Payment errs:  ${PROM_URL}/graph?g0.expr=sum(rate(traces_span_metrics_calls_total%7Bservice_name%3D%22payment%22%2Cstatus_code%3D%22STATUS_CODE_ERROR%22%7D%5B2m%5D))&g0.tab=0
-Jaeger:          ${JAEGER_UI}/
-Perch viz:       $(viz_base)/
-Pulse live API:  $(viz_base)/api/pulse/live/status
+=== Demo URLs (recording-ready) ===
+Perch viz (Astronomy Shop):  ${perch_ui}
+  MUST use env=local — navbar "production" keeps the GitHub/Vercel mock seed.
+Pulse live API:              $(viz_base)/api/pulse/live/status
+Payment metrics (5s refresh): ${metrics_ui}
+Prometheus (authoritative):  ${PROM_URL}/
+  Payment rate:  ${PROM_URL}/graph?g0.expr=sum(rate(traces_span_metrics_calls_total%7Bservice_name%3D%22payment%22%7D%5B2m%5D))&g0.tab=0&g0.range_input=15m
+  Payment errs:  ${PROM_URL}/graph?g0.expr=sum(rate(traces_span_metrics_calls_total%7Bservice_name%3D%22payment%22%2Cstatus_code%3D%22STATUS_CODE_ERROR%22%7D%5B2m%5D))&g0.tab=0&g0.range_input=15m
+Grafana (optional):          ${BASE_URL}/grafana/
+  Spanmetrics:   ${BASE_URL}/grafana/d/W2gX2zHVk48/spanmetrics-demo-dashboard?orgId=1&refresh=5s&from=now-15m&to=now&var-service=payment
+  If Grafana shows timeouts, prefer Payment metrics / Prometheus — do not assume telemetry is missing.
+Astronomy Shop:              ${BASE_URL}/
+Jaeger:                      ${JAEGER_UI}/
+
+Graph edges in Perch are static dependencies from examples/astronomy-shop/perch.yaml
+(not live trace inference). Live Pulse overlays regressions from Prometheus spanmetrics.
 EOF
 }
 
@@ -707,6 +850,8 @@ EOF
   start_demo_viz
   [[ "$(live_enabled)" == "1" ]] || fail "LIVE mode not active"
   log "LIVE mode: active (state=$(live_state))"
+  verify_astronomy_graph || fail "Astronomy Shop graph not loaded — hard-refresh ${VIZ_PORT}/?env=local"
+  start_payment_metrics_view
   print_urls
   log "Next: make demo-status   then (when ready) make demo-fault"
   log "NOTE: demo-up does NOT inject a fault."
@@ -866,7 +1011,7 @@ EOF
 
 cmd_down() {
   require_cmd python3
-  log "safe cleanup — disable fault, stop demo-owned viz only"
+  log "safe cleanup — disable fault, stop demo-owned viz + payment metrics view only"
   if [[ "$MOCK_MODE" == "1" ]]; then
     echo '{"active":false}' >"${MOCK_FIXTURE_DIR}/scenario_status.json"
   else
@@ -876,6 +1021,7 @@ cmd_down() {
   fault_st="$(fault_injection_state)"
   log "Fault injection: ${fault_st}"
   stop_demo_viz
+  stop_payment_metrics_view
   if shop_core_up; then
     log "Astronomy Shop: still RUNNING (containers preserved; volumes untouched)"
   else
