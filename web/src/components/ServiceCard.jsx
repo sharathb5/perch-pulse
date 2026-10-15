@@ -47,6 +47,7 @@ export function ServiceCard({ data, selected }) {
         pulseTab: normalizePulseTab(searchParams.get('pulse')),
         incidentId: decodeIncidentId(searchParams.get('incident')) || null,
         runId: decodeRunId(searchParams.get('run')) || null,
+        searchParams,
       }),
     )
   }

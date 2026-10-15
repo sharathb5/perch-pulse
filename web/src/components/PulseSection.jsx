@@ -52,11 +52,11 @@ export function PulseSection({
 
   const openIncident = (incidentId) => {
     // Milestone C: open dedicated Pulse sidebar focused on this incident.
-    navigate(pulseIncidentPath(stackName, nodeId, incidentId))
+    navigate(pulseIncidentPath(stackName, nodeId, incidentId, { searchParams }))
   }
 
   const clearIncident = () => {
-    navigate(pulseIncidentPath(stackName, nodeId))
+    navigate(pulseIncidentPath(stackName, nodeId, null, { searchParams }))
   }
 
   const openInSidebar = () => {
