@@ -31,8 +31,7 @@ Disk: ~24 GiB free at start; ~22 GiB after live smoke. Astronomy Shop contai
 
 | Requested metric | Status |
 |------------------|--------|
-| Classical detector **precision / recall** | **Not published.** Closest offline signals are fault-detection and control-FP counters in `internal/pulse/evaluate` (`pulse.eval.v1`), exercised by unit tests — no dated live scorecard. |
-| Classical multi-scenario detector **precision / recall** | Still **not published** as aggregates — only one live `error-payment` lifecycle PASS (not a full eval corpus). |
+| Classical detector **precision / recall** | **Not published** as aggregates. Offline unit counters exist; live evidence is a single `error-payment` lifecycle PASS, not a multi-scenario scorecard. |
 | Live **correct service attribution** rate | **1/1** on the required payment target for the 2026-10-15 smoke; not a multi-scenario rate. Offline unit coverage remains. |
 | Browser UI ACTIVE→Investigate during live fault | **Not measured** (no second injection; no Playwright against live viz in ACTIVE window). |
 | Semantic correctness of LLM proposals | **NOT EVALUATED** (human rubric empty; real provider **NOT RUN** this RC). |
