@@ -13,6 +13,8 @@ Modes (never silently mixed):
 
 Orchestrator: [`scripts/demo/pulse-demo.sh`](../scripts/demo/pulse-demo.sh)
 
+**LIVE recording (presenter commands):** Prefer [`docs/demo-recording.md`](demo-recording.md) and `make demo-up|status|fault|recover|down` ([`scripts/demo/recording.sh`](../scripts/demo/recording.sh)). Those targets reuse a healthy Astronomy Shop, never inject a fault on `demo-up`, and do not stop shop containers on `demo-down`. Do not use `pulse-demo.sh --mode live --phase all` for recording — it delegates to `ci-live-fault.sh`, which stops Docker on cleanup.
+
 **Provenance rule:** mock/replay never export ambient `PERCH_PULSE_DIR` / `~/.perch` records as synthetic. To export real persisted Pulse data, pass `--use-real-pulse-dir DIR` with `--mode live` (labels `observed_local`). The export CLI also refuses `synthetic_fixture` when the pulse-dir is non-empty.
 
 ```bash

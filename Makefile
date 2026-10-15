@@ -5,6 +5,7 @@
 .PHONY: build web-build web-deps web-build-embed web-lint web-test web-e2e \
 	go-fmt go-vet go-test provider-validate security \
 	perch-regression pulse-integration databricks-integration-test \
+	demo-preflight demo-up demo-status demo-fault demo-recover demo-down demo-test \
 	verify test lint run
 
 # Pin security scanners so the gate is reproducible across days.
@@ -75,10 +76,37 @@ security:
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -quiet -exclude=G304 ./...
 	GOTOOLCHAIN=$(GO_TOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
+# --- Demo recording (LIVE Astronomy Shop; see docs/demo-recording.md) -------
+# Reuses existing shop/scenario/viz tooling. demo-up never injects a fault.
+# demo-down stops only demo-owned perch viz; shop containers are preserved.
+
+demo-preflight:
+	./scripts/demo/recording.sh preflight
+
+demo-up:
+	./scripts/demo/recording.sh up
+
+demo-status:
+	./scripts/demo/recording.sh status
+
+demo-fault:
+	./scripts/demo/recording.sh fault
+
+demo-recover:
+	./scripts/demo/recording.sh recover
+
+demo-down:
+	./scripts/demo/recording.sh down
+
+# Offline mocked orchestration checks (no Docker fault injection, no cloud).
+demo-test:
+	./scripts/demo/test_provenance.sh
+	./scripts/demo/test_recording.sh
+
 # --- Aggregate gate ---------------------------------------------------------
 
 # Order matters: embed build before Go packages that import web.
-verify: web-deps web-build-embed web-lint web-test go-fmt go-vet go-test provider-validate security
+verify: web-deps web-build-embed web-lint web-test go-fmt go-vet go-test provider-validate security demo-test
 
 # --- Developer convenience --------------------------------------------------
 
