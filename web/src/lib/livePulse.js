@@ -242,6 +242,37 @@ export function unmappedLiveServices(servicesResponse) {
 }
 
 /**
+ * Overlay list/live lifecycle fields onto a historical incident detail body.
+ * Detail GET is file-store only and lacks lifecycle/liveSource; without this,
+ * investigation view can show HISTORICAL while the list correctly shows ACTIVE.
+ *
+ * Does not invent ACTIVE — only copies lifecycle/liveSource/open from the
+ * already-merged list row when incident IDs match.
+ *
+ * @param {object | null | undefined} detailIncident — normalizeIncident result
+ * @param {object | null | undefined} listIncident — mergeIncidentsPreferLive row
+ * @returns {object | null}
+ */
+export function overlayIncidentLifecycle(detailIncident, listIncident) {
+  if (!detailIncident) return null
+  if (!listIncident) return detailIncident
+  if (String(listIncident.incidentId ?? '') !== String(detailIncident.incidentId ?? '')) {
+    return detailIncident
+  }
+  const out = { ...detailIncident }
+  if (listIncident.lifecycle != null && String(listIncident.lifecycle) !== '') {
+    out.lifecycle = listIncident.lifecycle
+  }
+  if (listIncident.liveSource != null && String(listIncident.liveSource) !== '') {
+    out.liveSource = listIncident.liveSource
+  }
+  if (typeof listIncident.open === 'boolean') {
+    out.open = listIncident.open
+  }
+  return out
+}
+
+/**
  * True when the live collector snapshot is currently usable for ACTIVE claims.
  * Retained incident views after a failed poll must not stay labeled ACTIVE.
  * @param {object | null | undefined} liveStatus — normalizeLiveStatus result

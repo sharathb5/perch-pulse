@@ -25,6 +25,11 @@ perch viz --env local --port 3131
 When disabled or misconfigured, original Perch, historical Pulse APIs, and Run
 Pulse remain unchanged. Live endpoints report **unavailable**, never healthy.
 
+The viz UI polls `/api/pulse/*` and `/api/pulse/live/*` every **8s**
+(`usePulseData`); graph/status every **10s**. Incoming telemetry does not
+require restarting `perch viz` once the collector is enabled and Prometheus is
+reachable.
+
 ## Security boundaries
 
 | Rule | Detail |
@@ -122,6 +127,8 @@ Live run (manual, not a PR gate):
 # GitHub Actions → Astronomy Smoke → mode=live-fault, confirm=run
 ./examples/astronomy-shop/scripts/ci-live-fault.sh
 ```
+
+**Dated local PASS (2026-10-15):** reused existing Astronomy Shop containers (no rebuild); ran `live-fault-smoke` with `error-payment` against Live Pulse on port 18765. Result **PASS** — payment `error_rate` 0→0.5, active incident then measured recovery. Detection ≈70.3 s after fault on; recovery ≈130 s after fault off. Full `ci-live-fault.sh` was not used (its cleanup stops Docker). See [`verification-matrix.md`](verification-matrix.md#2026-10-15--live-error-payment-fault-lifecycle) and [`pulse-metrics.md`](pulse-metrics.md). Browser UI during ACTIVE was not verified.
 
 ## Limitations (MVP)
 

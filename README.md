@@ -171,10 +171,10 @@ python -m perch_pulse_dbx live-load \
 
 | Check | This RC default |
 |-------|-----------------|
-| LIVE DELTA INGESTION | **NOT RUN** |
-| LIVE MLFLOW TRACKING | **NOT RUN** |
+| LIVE DELTA INGESTION | **EXECUTED** (2026-10-13) — demo/synthetic 37-row sample; see [`verification-matrix.md`](docs/verification-matrix.md#2026-10-13--live-databricks-delta--mlflow-demo-sample) |
+| LIVE MLFLOW TRACKING | **EXECUTED** (2026-10-13) — offline eval report logged live; not real-model quality |
 
-Connection check ≠ completed ingestion. Details: [`integrations/databricks/README.md`](integrations/databricks/README.md)
+Connection check ≠ completed ingestion. A dated demo PASS exists; re-running cloud load still requires explicit authorization. Details: [`integrations/databricks/README.md`](integrations/databricks/README.md)
 
 ---
 
@@ -199,6 +199,7 @@ Connection check ≠ completed ingestion. Details: [`integrations/databricks/REA
 | Demo offline | `./scripts/demo/pulse-demo.sh --mode mock --phase offline` |
 
 Journey honesty table: [`docs/verification-matrix.md`](docs/verification-matrix.md)  
+Reproducible offline metrics: [`docs/pulse-metrics.md`](docs/pulse-metrics.md)  
 Prior LIVE shop evidence: **2026-10-09** in [`docs/astronomy-shop.md`](docs/astronomy-shop.md) (`error-payment` flagd activation/recovery + `verify-live.sh`).
 
 ---
