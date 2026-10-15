@@ -8,6 +8,7 @@ import {
   formatLiveSignalValue,
   hasLiveRegression,
   mergeIncidentsPreferLive,
+  overlayIncidentLifecycle,
   parseLiveIncidentsResponse,
   parseLiveServicesResponse,
   parseLiveStatusResponse,
@@ -110,6 +111,27 @@ describe('livePulse contracts (Go-generated fixtures)', () => {
     expect(merged.filter((i) => i.incidentId === id)).toHaveLength(1)
     expect(merged[0].lifecycle).toBe('active')
     expect(merged[0].liveSource).toBe('live')
+  })
+
+  it('overlayIncidentLifecycle copies list ACTIVE onto detail without inventing ids', () => {
+    const detail = {
+      incidentId: 'inc|astronomy/local/payment|1',
+      open: true,
+      primaryServiceId: 'astronomy/local/payment',
+    }
+    const list = {
+      incidentId: 'inc|astronomy/local/payment|1',
+      open: true,
+      lifecycle: 'active',
+      liveSource: 'live',
+    }
+    const overlaid = overlayIncidentLifecycle(detail, list)
+    expect(overlaid.lifecycle).toBe('active')
+    expect(overlaid.liveSource).toBe('live')
+    expect(overlayIncidentLifecycle(detail, null)).toEqual(detail)
+    expect(
+      overlayIncidentLifecycle(detail, { ...list, incidentId: 'other' }).lifecycle,
+    ).toBeUndefined()
   })
 
   it('does not keep ACTIVE when collector is unavailable', () => {

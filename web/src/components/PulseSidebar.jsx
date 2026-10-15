@@ -9,6 +9,7 @@ import {
   formatLiveBaseline,
   formatLiveSignalValue,
   liveRuntimeSummary,
+  overlayIncidentLifecycle,
 } from '../lib/livePulse.js'
 import {
   INCIDENT_STATE,
@@ -517,9 +518,11 @@ function IncidentsPanel({
   )
 
   if (incidentId) {
+    const listIncident = incidents.find((i) => i.incidentId === incidentId) ?? null
     return (
       <InvestigationView
         incidentId={incidentId}
+        listIncident={listIncident}
         graphNodeByServiceId={graphNodeByServiceId}
         stackName={stackName}
         nodeId={nodeId}
@@ -896,7 +899,14 @@ function EvidenceInvestigationReport({
   )
 }
 
-function InvestigationView({ incidentId, graphNodeByServiceId, stackName, nodeId, onBack }) {
+function InvestigationView({
+  incidentId,
+  listIncident,
+  graphNodeByServiceId,
+  stackName,
+  nodeId,
+  onBack,
+}) {
   const navigate = useNavigate()
   const { detail, loading, error } = usePulseIncident(incidentId)
   const {
@@ -914,7 +924,12 @@ function InvestigationView({ incidentId, graphNodeByServiceId, stackName, nodeId
   } = usePulseInvestigation(incidentId)
   const [assessment, setAssessment] = useState('useful')
   const [feedbackRationale, setFeedbackRationale] = useState('')
-  const incident = detail?.incident
+  // Detail GET is historical file-store; overlay polled list lifecycle so ACTIVE
+  // incidents do not flip to HISTORICAL when opening Investigate.
+  const incident = useMemo(
+    () => overlayIncidentLifecycle(detail?.incident, listIncident),
+    [detail?.incident, listIncident],
+  )
   const correlation = detail?.correlation
   const digestRows = useMemo(
     () => (incident ? buildDigestComparisonRows(incident) : []),
