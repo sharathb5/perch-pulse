@@ -45,12 +45,16 @@ Orchestrator: [`scripts/demo/pulse-demo.sh`](../scripts/demo/pulse-demo.sh)
 
 Prefer GitHub `astronomy-smoke` / `ci-live-fault` when local disk is tight. Do not invent detector success from flagd-only activation.
 
-1. **Healthy baseline** — shop up; payment errors near zero; optional Live Pulse collector watching Prometheus.
+**Env names only (LIVE viz):** `PERCH_LIVE_PULSE_ENABLED`, `PERCH_LIVE_PULSE_PROM_URL` (e.g. `http://127.0.0.1:9090`), optional `PERCH_LIVE_PULSE_POLL_INTERVAL` / `PERCH_LIVE_PULSE_FRESHNESS`, `PERCH_PULSE_DIR`, `PERCH_RUN_PULSE_DEMO_BASE_URL`. Never commit values.
+
+**UI refresh:** Pulse + live incidents poll every **8s**; graph/status every **10s**; live collector default **15s**. No manual Perch restart required for incoming telemetry once Live Pulse is enabled.
+
+1. **Healthy baseline** — shop up; payment errors near zero; enable Live Pulse; wait until collector leaves `warming_up` (baseline windows).
 2. **Fault enablement** — `./examples/astronomy-shop/scenarios/scenario.sh start error-payment`
-3. **Incident detection** — wait for detector / `live-fault-smoke` expect `error_rate` on payment.
-4. **Inspection** — `perch viz` → Pulse sidebar → incident (ACTIVE) → Investigate.
-5. **Fault disablement** — `scenario.sh stop error-payment` (mandatory).
-6. **Observed recovery** — incident lifecycle → recovered; record remains historical.
+3. **Incident detection** — wait for detector / `live-fault-smoke` expect `error_rate` on payment (`astronomy/local/payment`).
+4. **Inspection** — `perch viz` → Pulse sidebar → incident (ACTIVE) → Investigate (F1). Optional Run Pulse / LLM only if configured.
+5. **Fault disablement** — `scenario.sh stop error-payment` (mandatory even on failure).
+6. **Observed recovery** — incident lifecycle → RECOVERED; record remains historical (not a current outage).
 
 Scripted path:
 

@@ -30,11 +30,23 @@ Legend:
 | 11 | Inspect F1 vs LLM | **OFFLINE VERIFIED** (UI + eval); live model compare **BLOCKED BY AUTHORIZATION** | Sidebar + `investigation-eval` |
 | 12 | Explicit Run Pulse | **OFFLINE VERIFIED** + smoke tooling | [`pulse-run.md`](pulse-run.md); GHA dispatch-only for full shop |
 | 13 | Human feedback | **OFFLINE VERIFIED** | Playwright + FileStore API |
-| 14 | Evaluation compares methods | **OFFLINE VERIFIED** | F2b/F2c corpora; explicit denominators |
+| 14 | Evaluation compares methods | **OFFLINE VERIFIED** | F2b/F2c corpora; explicit denominators — see [`pulse-metrics.md`](pulse-metrics.md) (2026-10-15) |
 | 15 | JSONL analytical export | **OFFLINE VERIFIED** | F3a `export-analytics` + sample fixture |
-| 16 | Databricks Delta ingest | **LIVE VERIFIED** (2026-10-13 demo sample); also **OFFLINE VERIFIED** | See [dated evidence](#2026-10-13--live-databricks-delta--mlflow-demo-sample) |
-| 17 | MLflow tracks evaluations | **LIVE VERIFIED** (2026-10-13 demo eval report); also **OFFLINE VERIFIED** (fake client) | Experiment `/Users/sharathjb23@gmail.com/perch-pulse-investigation-eval`; synthetic fixtures ≠ live model quality |
+| 16 | Databricks Delta ingest | **LIVE VERIFIED** (2026-10-13 demo sample); also **OFFLINE VERIFIED** | See [dated evidence](#2026-10-13--live-databricks-delta--mlflow-demo-sample). **Not re-executed** in 2026-10-15 stabilization session. |
+| 17 | MLflow tracks evaluations | **LIVE VERIFIED** (2026-10-13 demo eval report); also **OFFLINE VERIFIED** (fake client) | Experiment `/Users/sharathjb23@gmail.com/perch-pulse-investigation-eval`; synthetic fixtures ≠ live model quality. **Not re-executed** 2026-10-15. |
 | 18 | Engineer verifies lineage | **LIVE VERIFIED** (COUNT/key readback + idempotent rerun); also **OFFLINE VERIFIED** (fake) | Identical 37-row rerun left all table counts unchanged |
+
+## UI refresh / demo reliability (2026-10-15 audit)
+
+| Channel | Interval | Notes |
+|---------|----------|-------|
+| Pulse historical + live APIs | **8s** client poll | `web/src/hooks/usePulseData.js` — no WebSocket; failed refresh marks snapshot stale (stale ≠ healthy) |
+| Graph + status | **10s** | `usePerchData.js` — active probes independent of Pulse |
+| Run Pulse run status | **1.5s** while non-terminal | `usePulseRun.js` |
+| Live collector (server) | **15s** default | `PERCH_LIVE_PULSE_POLL_INTERVAL`; freshness window default **2m** |
+| Investigation / LLM | on demand | No background poll |
+
+Investigation detail overlays polled list `lifecycle`/`liveSource` so an ACTIVE live incident does not flip to HISTORICAL when opening Investigate (`overlayIncidentLifecycle`).
 
 ## External validation flags (this release candidate)
 
@@ -55,6 +67,7 @@ Legend:
 | Playwright | `make web-e2e` |
 | Demo dry-run | `./scripts/demo/pulse-demo.sh --mode mock --phase preflight --dry-run` |
 | Demo offline | `./scripts/demo/pulse-demo.sh --mode mock --phase offline` |
+| Metrics reproduce | See [`pulse-metrics.md`](pulse-metrics.md) |
 
 ## Previously verified live workflow evidence
 

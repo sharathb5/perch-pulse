@@ -25,6 +25,11 @@ perch viz --env local --port 3131
 When disabled or misconfigured, original Perch, historical Pulse APIs, and Run
 Pulse remain unchanged. Live endpoints report **unavailable**, never healthy.
 
+The viz UI polls `/api/pulse/*` and `/api/pulse/live/*` every **8s**
+(`usePulseData`); graph/status every **10s**. Incoming telemetry does not
+require restarting `perch viz` once the collector is enabled and Prometheus is
+reachable.
+
 ## Security boundaries
 
 | Rule | Detail |
